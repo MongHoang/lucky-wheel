@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Vòng Xoay May Mắn</title>
+
+  <!-- Styles của bạn -->
+  <link rel="stylesheet" href="/css/main.css" />
+
+  <!-- Meta cơ bản -->
+  <meta name="description" content="Vòng xoay may mắn với hiệu ứng 3D, nút quay ở tâm" />
+</head>
+<body>
+
+<main>
+  <h1 style="text-align:center; margin: 16px 0 8px;">Vòng Xoay May Mắn</h1>
+
+  <!-- Khối bánh xe: 2 canvas chồng nhau + nút Quay ở tâm -->
+  <div class="wheel-wrap" role="region" aria-label="Vòng quay">
+    <!-- Lớp quay: lát, vành, hubcap -->
+    <canvas id="wheel" aria-hidden="true"></canvas>
+
+    <!-- Lớp đứng yên: highlight, pointer, specular -->
+    <canvas id="fx" aria-hidden="true"></canvas>
+
+    <!-- Nút Quay (overlay HTML, không quay) -->
+    <button id="spinBtn" class="spin-btn" type="button" aria-label="Quay vòng">Quay</button>
+  </div>
+
+  <!-- Trạng thái -->
+  <p id="status" class="status" aria-live="polite">Đang tải…</p>
+
+  <noscript>
+    <p style="text-align:center;color:#b00020">Trình duyệt cần bật JavaScript để sử dụng vòng quay.</p>
+  </noscript>
+</main>
+
+<!-- App logic -->
+<script src="/js/app.js" defer></script>
+</body>
+</html>

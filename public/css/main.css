@@ -1,0 +1,54 @@
+/* Vùng chứa bánh xe: vuông, căn giữa, có “bóng rơi” ellipse */
+.wheel-wrap{
+    position: relative;
+    width: min(88vw, 480px);
+    aspect-ratio: 1 / 1;
+    margin: 24px auto;
+    filter: drop-shadow(0 10px 22px rgba(0,0,0,0.22));
+}
+.wheel-wrap::after{ /* bóng ellipse dưới nền */
+    content:"";
+    position:absolute; left:8%; right:8%; bottom:-8%;
+    height:10%;
+    background: radial-gradient(ellipse at 50% 50%,
+    rgba(0,0,0,0.30), rgba(0,0,0,0) 70%);
+    pointer-events:none;
+    z-index:0;
+}
+
+/* Hai canvas chồng khít */
+#wheel,#fx{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    display:block;      /* tránh gap baseline */
+    border-radius:50%;
+}
+
+/* Nút tròn ở tâm (overlay) */
+.spin-btn{
+    position:absolute; left:50%; top:50%;
+    transform:translate(-50%,-50%);
+    width:26%; aspect-ratio:1/1; border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font:600 18px/1.1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color:#fff; text-shadow: 0 1px 0 rgba(0,0,0,0.25);
+    cursor:pointer; user-select:none;
+    z-index:3;
+
+    /* “nút mâm” bóng bẩy */
+    background: radial-gradient(120% 120% at 30% 30%, #69a9ff, #1769ff);
+    border:2px solid rgba(255,255,255,0.6);
+    box-shadow:
+            inset 0 8px 16px rgba(255,255,255,0.30),
+            inset 0 -10px 18px rgba(0,0,0,0.25),
+            0 8px 22px rgba(0,0,0,0.28);
+}
+.spin-btn:hover { filter: brightness(1.06); }
+.spin-btn:active{ transform:translate(-50%,-50%) scale(0.98); }
+.spin-btn:disabled{
+    opacity:.7; cursor:not-allowed;
+    transform:translate(-50%,-50%) scale(0.98);
+}
+
+/* Trạng thái nhỏ gọn */
+.status{ text-align:center; margin:8px 0 16px; color:#444; }
