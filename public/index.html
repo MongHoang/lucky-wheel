@@ -4,39 +4,50 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Vòng Xoay May Mắn</title>
-
-  <!-- Styles của bạn -->
   <link rel="stylesheet" href="/css/main.css" />
-
-  <!-- Meta cơ bản -->
-  <meta name="description" content="Vòng xoay may mắn với hiệu ứng 3D, nút quay ở tâm" />
 </head>
 <body>
-
 <main>
-  <h1 style="text-align:center; margin: 16px 0 8px;">Vòng Xoay May Mắn</h1>
+  <h1 style="text-align:center; margin:16px 0 8px;">Vòng Xoay May Mắn</h1>
 
-  <!-- Khối bánh xe: 2 canvas chồng nhau + nút Quay ở tâm -->
   <div class="wheel-wrap" role="region" aria-label="Vòng quay">
-    <!-- Lớp quay: lát, vành, hubcap -->
+    <!-- Lớp quay -->
     <canvas id="wheel" aria-hidden="true"></canvas>
-
-    <!-- Lớp đứng yên: highlight, pointer, specular -->
+    <!-- Lớp đứng yên (highlight + pointer) -->
     <canvas id="fx" aria-hidden="true"></canvas>
-
-    <!-- Nút Quay (overlay HTML, không quay) -->
+    <!-- Nút Quay ở tâm -->
     <button id="spinBtn" class="spin-btn" type="button" aria-label="Quay vòng">Quay</button>
   </div>
 
-  <!-- Trạng thái -->
-  <p id="status" class="status" aria-live="polite">Đang tải…</p>
-
-  <noscript>
-    <p style="text-align:center;color:#b00020">Trình duyệt cần bật JavaScript để sử dụng vòng quay.</p>
-  </noscript>
+  <div class="info">
+    <p id="greeting" class="greeting">Chưa đăng ký</p>
+    <p id="spins" class="spins">Lượt còn: —</p>
+    <p id="status" class="status" aria-live="polite">Sẵn sàng</p>
+  </div>
 </main>
 
-<!-- App logic -->
+<!-- Modal Đăng ký -->
+<div id="regModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal__dialog">
+    <h2 class="modal__title">Đăng ký để quay</h2>
+    <form id="regForm" class="modal__form">
+      <label class="field">
+        <span>Họ và tên</span>
+        <input id="regName" type="text" placeholder="Nguyễn Văn A" required />
+      </label>
+      <label class="field">
+        <span>Số điện thoại</span>
+        <input id="regPhone" type="tel" placeholder="09xx xxx xxx" required />
+      </label>
+      <div class="modal__actions">
+        <button type="submit" class="btn primary">Xác nhận</button>
+        <button type="button" id="regCancel" class="btn ghost">Đóng</button>
+      </div>
+      <p class="modal__hint">* Bắt buộc đăng ký để quay.</p>
+    </form>
+  </div>
+</div>
+
 <script src="/js/app.js" defer></script>
 </body>
 </html>
