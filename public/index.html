@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vòng Xoay May Mắn — Glass + Blue Button</title>
+  <title>Vòng Xoay May Mắn — Glass + Lights</title>
   <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
@@ -25,8 +25,14 @@
   <section class="stage">
     <div class="card wheel-card">
       <div class="wheel-wrap" role="region" aria-label="Vòng quay">
+        <!-- Canvas nền để vẽ CHÂN ĐẾ (dưới cùng, không che bánh) -->
+        <canvas id="bg" aria-hidden="true"></canvas>
+        <!-- Canvas bánh xe -->
         <canvas id="wheel" aria-hidden="true"></canvas>
+        <!-- Canvas hiệu ứng + KIM -->
         <canvas id="fx" aria-hidden="true"></canvas>
+
+        <!-- Nút quay (giữ style cũ) -->
         <button id="spinBtn" class="spin-btn" type="button" aria-label="Quay">Quay</button>
       </div>
 
@@ -39,7 +45,7 @@
   </section>
 </main>
 
-<!-- Modal đăng ký (ẩn mặc định) -->
+<!-- Modal đăng ký (giữ nguyên) -->
 <div id="regModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="modal__dialog">
     <h2 class="modal__title">Đăng ký để quay</h2>
@@ -58,6 +64,17 @@
       </div>
       <p class="modal__hint">* Bắt buộc đăng ký để quay.</p>
     </form>
+  </div>
+</div>
+
+<!-- Modal trúng thưởng (mới) -->
+<div id="winModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
+  <div class="modal__dialog">
+    <h2 class="modal__title">🎉 Chúc mừng!</h2>
+    <p id="winText" class="modal__prize">Bạn trúng: …</p>
+    <div class="modal__actions">
+      <button type="button" id="winOk" class="btn primary">Đóng</button>
+    </div>
   </div>
 </div>
 
