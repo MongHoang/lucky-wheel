@@ -1,32 +1,37 @@
-/* Lucky Wheel 3D — Version "Suspense + Optimized While Spinning (1-phase)"
-   - Chân đế kiểu banner (canvas #bg, không che bánh)
-   - Viền vàng + bóng đèn (đèn có thể tắt nháy khi quay để mượt)
-   - Nút QUAY giữ style cũ
-   - Âm thanh: tick khi qua ranh + tiếng win khi trúng
-   - Popup to + icon + confetti
-   - Kim đỏ tam giác ở DƯỚI, chĩa vào trong
-   - Fix dừng lát: tính theo góc hiện tại
-   - 1-pha easing: bậc 2 (chậm hơn chút), tổng 12s, 5 vòng nhanh
+/* Lucky Wheel 3D — "Suspense + Contact FAB + Ticker + eSMS notify"
+   - 1-pha easing, đầu nhanh hơn, cuối hãm dài hơn (EASE_POWER=2.4, 13s, 6 vòng)
+   - Kim đỏ ở dưới, viền vàng + bóng đèn chớp, chân đế đẹp
+   - Popup trúng: confetti + âm vỗ tay
+   - Nút QUAY in hoa
+   - FAB Zalo/Messenger nổi góc phải (icon)
+   - Banner chạy, online ngẫu nhiên
+   - Form đăng ký: thêm Tỉnh/TP dropdown, SĐT kiểu số
+   - Gọi API backend /api/notify-win để server gọi eSMS (bảo mật key)
 */
 (() => {
   // ===== Config & keys =====
   const LS_USER='lw_user', LS_SPINS='lw_spins', LS_SHARED='lw_shared_awarded';
   const API_WHEEL='/api/wheel', API_SPIN='/api/spin';
+  const API_NOTIFY='/api/notify-win'; // <-- server của bạn sẽ gọi eSMS
 
-  // Spin timing (1-pha: chậm hơn chút)
-  const SPIN_TOTAL_MS = 12000;   // tổng 12s
-  const EXTRA_TURNS   = 5;       // vòng nhanh đầu
-  const EASE_POWER    = 2.0;     // easing bậc 2 → hãm dài hơn bậc 3
+  // Spin timing — 1-pha (đầu nhanh hơn, cuối hãm dài hơn)
+  const SPIN_TOTAL_MS = 13000;   // 13s
+  const EXTRA_TURNS   = 6;       // thêm vòng nhanh để cảm giác "vèo"
+  const EASE_POWER    = 2.4;     // >2 → tốc đầu lớn hơn, hãm dài
   const POINTER_ANGLE = Math.PI/2; // kim ở DƯỚI, chĩa lên trong
 
   // Bóng đèn
   const BULB_COUNT=28;
-  const BLINK_MS=520;            // nháy đảo nhóm mỗi 520ms
+  const BLINK_MS=520;
 
-  // Tối ưu khi đang quay (Phương án A)
-  const BLINK_DURING_SPIN = false;       // tắt nháy trong lúc quay (vẫn sáng)
-  const REDUCE_SHADOWS_WHILE_SPIN = true;// hạn chế shadow blur nặng khi quay
-  const STROKE_TEXT_WHILE_SPIN = false;  // chỉ fill chữ khi quay
+  // Tối ưu khi đang quay
+  const BLINK_DURING_SPIN = false;
+  const REDUCE_SHADOWS_WHILE_SPIN = true;
+  const STROKE_TEXT_WHILE_SPIN = false;
+
+  // Liên hệ
+  const ZALO_URL='https://zalo.me/yourZaloID';
+  const MESSENGER_URL='https://m.me/yourPageID';
 
   const SHARE_TARGET_URL='https://example.com/your-post';
 
@@ -40,15 +45,23 @@
   const elGreeting=document.getElementById('greeting');
   const elSpins=document.getElementById('spins');
   const elStatus=document.getElementById('status');
+  const elOnline=document.getElementById('online');
   const regModal=document.getElementById('regModal');
   const regForm=document.getElementById('regForm');
   const regCancel=document.getElementById('regCancel');
   const regNameInp=document.getElementById('regName');
   const regPhoneInp=document.getElementById('regPhone');
-
+  const regProvinceSel=document.getElementById('regProvince');
   const winModal=document.getElementById('winModal');
   const winText=document.getElementById('winText');
   const winOk=document.getElementById('winOk');
+
+  const fabZalo=document.getElementById('fabZalo');
+  const fabMess=document.getElementById('fabMess');
+
+  // Ticker
+  const ticker=document.getElementById('ticker');
+  const tickerTrack=document.getElementById('tickerTrack');
 
   // ===== Canvas =====
   const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
@@ -58,19 +71,30 @@
 
   // ===== State =====
   let segments=[], rotation=0, isSpinning=false, spins=0;
-  let audioCtx=null, tickBuf=null, winBuf=null;
+  let audioCtx=null, tickBuf=null, applauseBuf=null;
   let animId=null;
 
   // ===== Utils =====
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
   const modTau=a=>{const TAU=Math.PI*2; return ((a%TAU)+TAU)%TAU;}
   const TAU=Math.PI*2;
-  const easeOut = t => 1 - Math.pow(1 - t, EASE_POWER); // 1-pha, bậc thấp → hãm sớm
+  const easeOut = t => 1 - Math.pow(1 - t, EASE_POWER);
   const q=new URLSearchParams(location.search);
   const DEV_MODE=q.has('dev'); const DEV_SPINS=q.get('spins')?parseInt(q.get('spins'),10):null;
 
   // Palette
   const PALETTE = ['#FF8A80','#9CC7FF','#B7E27A','#FFB285','#CFA9FF','#8ED1FF','#FFD166','#EF476F'];
+
+  // VN Provinces (63)
+  const VN_PROVINCES=[
+    "An Giang","Bà Rịa - Vũng Tàu","Bắc Giang","Bắc Kạn","Bạc Liêu","Bắc Ninh","Bến Tre","Bình Định","Bình Dương",
+    "Bình Phước","Bình Thuận","Cà Mau","Cần Thơ","Cao Bằng","Đà Nẵng","Đắk Lắk","Đắk Nông","Điện Biên","Đồng Nai",
+    "Đồng Tháp","Gia Lai","Hà Giang","Hà Nam","Hà Nội","Hà Tĩnh","Hải Dương","Hải Phòng","Hậu Giang","Hòa Bình",
+    "Hưng Yên","Khánh Hòa","Kiên Giang","Kon Tum","Lai Châu","Lâm Đồng","Lạng Sơn","Lào Cai","Long An","Nam Định",
+    "Nghệ An","Ninh Bình","Ninh Thuận","Phú Thọ","Phú Yên","Quảng Bình","Quảng Nam","Quảng Ngãi","Quảng Ninh",
+    "Quảng Trị","Sóc Trăng","Sơn La","Tây Ninh","Thái Bình","Thái Nguyên","Thanh Hóa","Thừa Thiên Huế","Tiền Giang",
+    "TP. Hồ Chí Minh","Trà Vinh","Tuyên Quang","Vĩnh Long","Vĩnh Phúc","Yên Bái"
+  ];
 
   // ===== Storage =====
   const loadUser=()=>{try{const r=localStorage.getItem(LS_USER);return r?JSON.parse(r):null;}catch{return null}};
@@ -95,13 +119,10 @@
     c.className='confetti-layer'; document.body.appendChild(c);
     const ctx=c.getContext('2d');
     const scale=Math.max(1, window.devicePixelRatio||1);
-    function size(){
-      c.width=innerWidth*scale; c.height=innerHeight*scale;
-      c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px';
-    }
+    function size(){ c.width=innerWidth*scale; c.height=innerHeight*scale; c.style.width=innerWidth+'px'; c.style.height=innerHeight+'px'; }
     size(); window.addEventListener('resize', size, {once:true});
     const colors=['#FFD166','#F4978E','#9CDBFF','#B5D99C','#FF4D6D','#F8ED62'];
-    const pieces=Array.from({length:count},()=>({
+    const pcs=Array.from({length:count},()=>({
       x:(innerWidth*scale)/2, y:-20*scale,
       vx:(Math.random()*2-1)*(4.8*scale),
       vy:(4+Math.random()*6)*scale*(-1),
@@ -112,7 +133,7 @@
     const g=0.12*scale, air=0.996, t0=performance.now();
     (function f(now){
       const t=now-t0; ctx.clearRect(0,0,c.width,c.height);
-      for(const p of pieces){
+      for(const p of pcs){
         p.vx*=air; p.vy=p.vy*air+g; p.x+=p.vx; p.y+=p.vy; p.rot+=p.vr;
         ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.rot); ctx.fillStyle=p.color;
         if(p.tri){ ctx.beginPath(); ctx.moveTo(-p.s/2,p.s/2); ctx.lineTo(0,-p.s/2); ctx.lineTo(p.s/2,p.s/2); ctx.closePath(); ctx.fill(); }
@@ -125,17 +146,17 @@
   function openWinModal(text){
     winText.textContent = text || 'Bạn trúng thưởng!';
     winModal.classList.remove('hidden');
-    launchConfetti(3400, 240);
-    playWin();
+    launchConfetti(3600, 260);
+    playApplause();
   }
   function closeWinModal(){ winModal.classList.add('hidden'); }
 
   // ===== Audio =====
   async function ensureAudioCtx(){ if(!audioCtx){const AC=window.AudioContext||window.webkitAudioContext; if(AC) audioCtx=new AC();} if(audioCtx&&audioCtx.state==='suspended'){try{await audioCtx.resume()}catch{}}}
   async function loadBuffer(url){ try{const r=await fetch(url); if(!r.ok) throw 0; const arr=await r.arrayBuffer(); return await new Promise((res,rej)=>audioCtx.decodeAudioData(arr,res,rej)); }catch{return null}}
-  async function initAudio(){ await ensureAudioCtx(); if(!audioCtx) return; if(!tickBuf) tickBuf=await loadBuffer('/sfx/tick.wav'); if(!winBuf) winBuf=await loadBuffer('/sfx/win.wav'); }
+  async function initAudio(){ await ensureAudioCtx(); if(!audioCtx) return; if(!tickBuf) tickBuf=await loadBuffer('/sfx/tick.wav'); if(!applauseBuf) applauseBuf=await loadBuffer('/sfx/applause.wav'); }
   function playTick(){ if(!audioCtx||!tickBuf) return; const s=audioCtx.createBufferSource(); s.buffer=tickBuf; s.connect(audioCtx.destination); try{s.start()}catch{} }
-  function playWin(){ if(!audioCtx||!winBuf) return; const s=audioCtx.createBufferSource(); s.buffer=winBuf; s.connect(audioCtx.destination); try{s.start()}catch{} }
+  function playApplause(){ if(!audioCtx||!applauseBuf) return; const s=audioCtx.createBufferSource(); s.buffer=applauseBuf; s.connect(audioCtx.destination); try{s.start()}catch{} }
 
   // ===== Canvas sizing =====
   function resizeCanvas(){
@@ -242,7 +263,7 @@
     // Bóng đèn chớp tắt
     const rb = rOuter - rimWidth/2, bulbR = rimWidth*0.33;
     const blinkParity = Math.floor(performance.now()/BLINK_MS) % 2;
-    const bulbsStaticOn = (isSpinning && !BLINK_DURING_SPIN); // khi quay: sáng hết, không nháy
+    const bulbsStaticOn = (isSpinning && !BLINK_DURING_SPIN);
     for(let i=0;i<BULB_COUNT;i++){
       const a = (i/BULB_COUNT)*TAU, x = Math.cos(a)*rb, y = Math.sin(a)*rb;
       const on = bulbsStaticOn ? true : ((i % 2) === blinkParity);
@@ -268,7 +289,7 @@
     ctxWheel.restore();
   }
 
-  // ===== Base =====
+  // ===== Base (chân đế) =====
   function drawBase(){
     const w=cvsBg.width,h=cvsBg.height,cx=w/2,cy=h/2;
     const rOuter=Math.min(cx,cy)-8*dpr;
@@ -337,18 +358,15 @@
     ctxFx.clearRect(0,0,w,h);
 
     ctxFx.save(); ctxFx.translate(cx,cy); ctxFx.rotate(POINTER_ANGLE);
-    const baseW = Math.max(rFace*0.22, 60*dpr);   // bề ngang đáy
-    const tipL  = Math.max(rFace*0.14, 44*dpr);   // dài mũi
-    const baseX = rFace + 6*dpr;                  // nhô ra ngoài chút
+    const baseW = Math.max(rFace*0.22, 60*dpr);
+    const tipL  = Math.max(rFace*0.14, 44*dpr);
+    const baseX = rFace + 6*dpr;
     const grad = ctxFx.createLinearGradient(baseX, -baseW/2, baseX - tipL, baseW/2);
     grad.addColorStop(0,'#ff3b2f'); grad.addColorStop(1,'#b50f08');
     ctxFx.beginPath(); ctxFx.moveTo(baseX, -baseW/2); ctxFx.lineTo(baseX, baseW/2); ctxFx.lineTo(baseX - tipL, 0); ctxFx.closePath();
     ctxFx.fillStyle=grad;
-    if(!(isSpinning && REDUCE_SHADOWS_WHILE_SPIN)){
-      ctxFx.shadowColor='rgba(0,0,0,.45)'; ctxFx.shadowBlur=12*dpr;
-    }else{
-      ctxFx.shadowBlur=0;
-    }
+    if(!(isSpinning && REDUCE_SHADOWS_WHILE_SPIN)){ ctxFx.shadowColor='rgba(0,0,0,.45)'; ctxFx.shadowBlur=12*dpr; }
+    else { ctxFx.shadowBlur=0; }
     ctxFx.fill();
     // viền sáng
     ctxFx.beginPath(); ctxFx.moveTo(baseX - 2*dpr, -baseW/2 + 2*dpr); ctxFx.lineTo(baseX - tipL + 3*dpr, 0); ctxFx.lineTo(baseX - 2*dpr, baseW/2 - 2*dpr);
@@ -373,6 +391,23 @@
   async function getWheel(){ try{const r=await fetch(API_WHEEL,{cache:'no-store'}); if(r.ok){const d=await r.json(); if(Array.isArray(d)&&d.length) return d;} }catch{} return fallbackSegments(); }
   async function postSpin(){ try{const r=await fetch(API_SPIN,{method:'POST'}); if(r.ok){const d=await r.json(); if(typeof d?.index==='number') return d;} }catch{} const i=Math.floor(Math.random()*segments.length); return {index:i,label:segments[i]?.label??''}; }
 
+  // ===== Notify backend (server gọi eSMS) =====
+  async function notifyWin(prize){
+    const u=loadUser()||{};
+    try{
+      await fetch(API_NOTIFY, {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          name: u.name||'',
+          phone: u.phone||'',
+          province: u.province||'',
+          prize: prize||''
+        })
+      });
+    }catch(err){ /* im lặng */ }
+  }
+
   // ===== Spin engine (1-pha) =====
   function setRotation(angle){
     const old=rotation; rotation=angle;
@@ -386,6 +421,7 @@
     const prize=segments[idx]?.label??'';
     setStatus(prize?`Bạn trúng: ${prize}`:'Hoàn tất!');
     openWinModal(prize?`Bạn trúng: ${prize}`:'Bạn đã hoàn tất lượt quay!');
+    notifyWin(prize); // <-- gọi backend để SMS qua eSMS
     // bật lại loop nháy
     if(animId) cancelAnimationFrame(animId);
     animId=requestAnimationFrame(function loop(){ drawWheel(); drawFx(); animId=requestAnimationFrame(loop); });
@@ -424,14 +460,52 @@
     }},600);
   }
 
+  // ===== Ticker (banner chạy) =====
+  function buildTickerItems(){
+    const names=["Nguyễn An","Trần Bình","Lê Chi","Phạm Dũng","Huỳnh Giang","Võ Hạnh","Đặng Khôi","Bùi Linh","Đỗ Minh","Phan Ngọc","Trương Oanh","Hồ Phúc","Tạ Quân","Ngô Ri","Dương Sơn","Lý Trang","Vũ Uyên","Kiều Vy","Châu Yến","Mai Gia"];
+    const prizes=(segments.length?segments.map(s=>s.label):["Voucher 10k","Voucher 20k","Voucher 50k","Voucher 100k","Chúc may mắn"]).filter(Boolean);
+    const pick=()=>names[(Math.random()*names.length)|0]+" vừa trúng "+prizes[(Math.random()*prizes.length)|0];
+    const items=Array.from({length:12},()=>pick());
+    const html=items.map(t=>`<span class="ticker__item">🔔 ${t}</span>`).join("");
+    tickerTrack.innerHTML = html + html; // nhân đôi để scroll vô hạn êm
+  }
+  function refreshTickerPeriodically(){
+    setInterval(buildTickerItems, 20000);
+  }
+
+  // ===== Online (random + dao động nhẹ) =====
+  function initOnline(){
+    let online=40+Math.floor(Math.random()*120); // 40..159
+    const render=()=>{ elOnline.textContent=`Đang online: ${online}`; };
+    render();
+    setInterval(()=>{ online = clamp(online + (Math.random()<0.5?-1:1)*(1+Math.floor(Math.random()*2)), 20, 300); render(); }, 8000);
+  }
+
+  // ===== Init form (province + số điện thoại số) =====
+  function initForm(){
+    for(const p of VN_PROVINCES){
+      const opt=document.createElement('option'); opt.value=opt.textContent=p; regProvinceSel.appendChild(opt);
+    }
+    regPhoneInp.addEventListener('input', ()=>{ regPhoneInp.value = regPhoneInp.value.replace(/\D/g,''); });
+  }
+
   // ===== Init =====
   async function init(){
+    fabZalo.href = ZALO_URL;
+    fabMess.href = MESSENGER_URL;
+
     segments=await getWheel();
+
     const stored=loadSpins();
     spins=(DEV_MODE && Number.isInteger(DEV_SPINS)) ? DEV_SPINS : (Number.isInteger(stored)?stored:1);
     saveSpins(spins);
 
     updateGreeting(); updateSpinsUI(); setStatus('Sẵn sàng');
+
+    initForm();
+    initOnline();
+    buildTickerItems();
+    refreshTickerPeriodically();
 
     resizeCanvas(); window.addEventListener('resize', resizeCanvas, {passive:true});
 
@@ -448,9 +522,9 @@
     regCancel.addEventListener('click', ()=>closeModal());
     regForm.addEventListener('submit', e=>{
       e.preventDefault();
-      const name=regNameInp.value.trim(), phone=regPhoneInp.value.trim();
-      if(!name||!phone) return;
-      saveUser({name,phone}); updateGreeting(); closeModal();
+      const name=regNameInp.value.trim(), phone=regPhoneInp.value.trim(), prov=regProvinceSel.value;
+      if(!name||!phone||!prov) return;
+      saveUser({name,phone,province:prov}); updateGreeting(); closeModal();
       setStatus('Đăng ký thành công! Bạn có thể quay.');
     });
 
@@ -474,7 +548,7 @@
       });
     }
 
-    // bắt đầu loop nháy bóng khi idle
+    // idle: nháy bóng
     animId=requestAnimationFrame(function loop(){ drawWheel(); drawFx(); animId=requestAnimationFrame(loop); });
   }
   document.addEventListener('DOMContentLoaded', init);

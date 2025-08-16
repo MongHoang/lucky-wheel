@@ -11,29 +11,31 @@
 <div class="page-bg" aria-hidden="true"></div>
 
 <main class="app-root container">
-  <!-- Greeting -->
+  <!-- Header -->
   <header class="hero">
     <h1 id="greeting" class="hero__title">Chưa đăng ký</h1>
     <p class="hero__meta">
       <span id="spins">Lượt còn: —</span>
       <span class="dot">•</span>
       <span id="status" class="muted" aria-live="polite">Sẵn sàng</span>
+      <span class="dot">•</span>
+      <span id="online" class="muted">Đang online: —</span>
     </p>
   </header>
 
-  <!-- Khu vực bánh (glass) -->
+  <!-- Khu vực bánh -->
   <section class="stage">
     <div class="card wheel-card">
       <div class="wheel-wrap" role="region" aria-label="Vòng quay">
-        <!-- Canvas nền để vẽ CHÂN ĐẾ (dưới cùng, không che bánh) -->
+        <!-- nền/đế (không che bánh) -->
         <canvas id="bg" aria-hidden="true"></canvas>
-        <!-- Canvas bánh xe -->
+        <!-- bánh -->
         <canvas id="wheel" aria-hidden="true"></canvas>
-        <!-- Canvas hiệu ứng + KIM -->
+        <!-- kim + fx -->
         <canvas id="fx" aria-hidden="true"></canvas>
 
-        <!-- Nút quay (giữ style cũ) -->
-        <button id="spinBtn" class="spin-btn" type="button" aria-label="Quay">Quay</button>
+        <!-- Nút QUAY (in hoa) -->
+        <button id="spinBtn" class="spin-btn" type="button" aria-label="QUAY">QUAY</button>
       </div>
 
       <div class="actions">
@@ -45,7 +47,7 @@
   </section>
 </main>
 
-<!-- Modal đăng ký (giữ nguyên) -->
+<!-- Modal đăng ký -->
 <div id="regModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="modal__dialog">
     <h2 class="modal__title">Đăng ký để quay</h2>
@@ -56,7 +58,13 @@
       </label>
       <label class="field">
         <span>Số điện thoại</span>
-        <input id="regPhone" type="tel" placeholder="09xx xxx xxx" required />
+        <input id="regPhone" type="tel" inputmode="numeric" pattern="[0-9]*" placeholder="09xxxxxxxx" required />
+      </label>
+      <label class="field">
+        <span>Địa chỉ (Tỉnh/TP)</span>
+        <select id="regProvince" required>
+          <option value="" selected disabled>Chọn tỉnh/thành</option>
+        </select>
       </label>
       <div class="modal__actions">
         <button type="submit" class="btn primary">Xác nhận</button>
@@ -67,7 +75,7 @@
   </div>
 </div>
 
-<!-- Modal trúng thưởng (mới) -->
+<!-- Modal trúng thưởng -->
 <div id="winModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="modal__dialog">
     <h2 class="modal__title">🎉 Chúc mừng!</h2>
@@ -78,7 +86,33 @@
   </div>
 </div>
 
-<!-- Dev panel (bật khi ?dev) -->
+<!-- Banner chạy dưới cùng -->
+<div id="ticker" class="ticker">
+  <div id="tickerTrack" class="ticker__track"></div>
+</div>
+
+<!-- Liên hệ nổi góc phải -->
+<div class="contact-fab" aria-label="Liên hệ nhanh">
+  <a id="fabZalo" class="fab-btn fab-zalo" href="https://zalo.me/yourZaloID"
+     target="_blank" rel="noopener" title="Chat Zalo" aria-label="Chat Zalo">
+    <!-- Icon Zalo: bong bóng chat + chữ Z -->
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M8 10a6 6 0 0 1 6-6h20a6 6 0 0 1 6 6v14a6 6 0 0 1-6 6H21l-7 6v-6h0a6 6 0 0 1-6-6V10z" fill="white" opacity=".9"/>
+      <path d="M19 15h10v3h-6.5l6.5 7h-10v-3h6.6L19 15z" fill="#0068ff"/>
+    </svg>
+  </a>
+
+  <a id="fabMess" class="fab-btn fab-mess" href="https://m.me/yourPageID"
+     target="_blank" rel="noopener" title="Chat Facebook Messenger" aria-label="Chat Facebook Messenger">
+    <!-- Icon Messenger: tia sét trong bong bóng -->
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M24 4C12.9 4 4 12.1 4 22c0 5.7 3 10.7 7.7 13.8V44l7-3.8c1.7.5 3.6.8 5.3.8 11.1 0 20-8.1 20-18S35.1 4 24 4z" fill="white" opacity=".95"/>
+      <path d="M18 28l6-8 4 3 7-7-6 8-4-3-7 7z" fill="#1b7cff"/>
+    </svg>
+  </a>
+</div>
+
+<!-- Dev panel (?dev) -->
 <div id="devPanel" class="dev-panel">
   <button data-act="add">+1 lượt</button>
   <button data-act="zero">về 0</button>
