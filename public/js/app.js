@@ -1,501 +1,385 @@
-/* ============================================================
- *  VÒNG XOAY — JS THUẦN + 2 CANVAS + AUDIO (whoosh/tick)
- *  FLOW: vào trang "Lượt còn: 1"; bấm Quay => nếu chưa đăng ký -> mở modal
- *        đăng ký xong mới được quay; quay xong => lượt về 0 (khóa nút)
- *  (Không jingle, không mute phím M)
- * ============================================================ */
+/* Lucky Wheel 3D — slices with stronger 3D, bigger pointer; spin ~10s (easeOutCubic) */
+(() => {
+  // ===== Config & keys =====
+  const LS_USER='lw_user', LS_SPINS='lw_spins', LS_SHARED='lw_shared_awarded';
+  const API_WHEEL='/api/wheel', API_SPIN='/api/spin';
 
-/* -------------------------------
-   DOM & STATE
----------------------------------*/
-const wrap        = document.querySelector('.wheel-wrap');
-const wheelCanvas = document.getElementById('wheel');
-const fxCanvas    = document.getElementById('fx');
-const ctxWheel    = wheelCanvas.getContext('2d');
-const ctxFx       = fxCanvas.getContext('2d');
+  // Spin timing
+  const SPIN_TOTAL_MS=10000;       // ~10s
+  const EXTRA_TURNS=6;             // số vòng trọn trước khi hạ tốc
+  const POINTER_ANGLE=-Math.PI/2;  // kim cố định ở đỉnh
 
-const spinBtn     = document.getElementById('spinBtn');
-const statusEl    = document.getElementById('status');
-const spinsEl     = document.getElementById('spins');
-const greetingEl  = document.getElementById('greeting');
+  // Share target (đổi sang bài thực tế)
+  const SHARE_TARGET_URL='https://example.com/your-post';
 
-// Modal đăng ký
-const regModal  = document.getElementById('regModal');
-const regForm   = document.getElementById('regForm');
-const regNameEl = document.getElementById('regName');
-const regPhoneEl= document.getElementById('regPhone');
-const regCancel = document.getElementById('regCancel');
+  // ===== DOM =====
+  const cvsWheel=document.getElementById('wheel');
+  const cvsFx=document.getElementById('fx');
+  const spinBtn=document.getElementById('spinBtn');
+  const shareBtn=document.getElementById('shareBtn');
+  const devPanel=document.getElementById('devPanel');
+  const elGreeting=document.getElementById('greeting');
+  const elSpins=document.getElementById('spins');
+  const elStatus=document.getElementById('status');
+  const regModal=document.getElementById('regModal');
+  const regForm=document.getElementById('regForm');
+  const regCancel=document.getElementById('regCancel');
+  const regNameInp=document.getElementById('regName');
+  const regPhoneInp=document.getElementById('regPhone');
 
-let slices = [];
-let rotation = 0;
-let N = 0;
-let sliceAngle = 0;
+  // ===== Canvas =====
+  const dpr=Math.max(1, Math.min(2, window.devicePixelRatio||1));
+  const ctxWheel=cvsWheel.getContext('2d');
+  const ctxFx=cvsFx.getContext('2d');
 
-// Lượt quay & đăng ký (demo = localStorage)
-const LS_SPINS = 'lw_spins';      // số lượt còn lại (int)
-const LS_USER  = 'lw_user';       // thông tin user {name, phone, registeredAt}
+  // ===== State =====
+  let segments=[], rotation=0, isSpinning=false, spins=0;
+  let audioCtx=null, whooshBuf=null, tickBuf=null, whooshNode=null;
 
-let spinsRemaining = null;
-let user = null; // {name, phone, registeredAt}
+  // ===== Utils =====
+  const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+  const easeOutCubic=t=>1-Math.pow(1-t,3);
+  const modTau=a=>{const TAU=Math.PI*2; return ((a%TAU)+TAU)%TAU;}
+  const q=new URLSearchParams(location.search);
+  const DEV_MODE=q.has('dev'); const DEV_SPINS=q.get('spins')?parseInt(q.get('spins'),10):null;
 
-/* ============================================================
- * 🎧 AUDIO — whoosh loop + tick
- * ============================================================ */
-function createAudio() {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
-  const master = ctx.createGain(); master.gain.value = 1.0; master.connect(ctx.destination);
-  const whooshGain = ctx.createGain(); whooshGain.gain.value = 0; whooshGain.connect(master);
-  const tickGain   = ctx.createGain(); tickGain.gain.value   = 0.9; tickGain.connect(master);
+  // ===== Palette (đậm & tương phản giống giao diện cũ) =====
+  const PALETTE = [
+    '#FF8A80','#9CC7FF','#B7E27A','#FFB285',
+    '#CFA9FF','#8ED1FF','#FFD166','#EF476F'
+  ];
 
-  const buffers = { whoosh: null, tick: null };
-  let whooshSrc = null;
+  // ===== Storage =====
+  const loadUser=()=>{try{const r=localStorage.getItem(LS_USER);return r?JSON.parse(r):null;}catch{return null}};
+  const saveUser=u=>localStorage.setItem(LS_USER,JSON.stringify(u));
+  const loadSpins=()=>{const v=parseInt(localStorage.getItem(LS_SPINS)||'NaN',10);return Number.isFinite(v)?v:null};
+  const saveSpins=v=>localStorage.setItem(LS_SPINS,String(v));
+  const loadSharedAwarded=()=>localStorage.getItem(LS_SHARED)==='1';
+  const saveSharedAwarded=v=>localStorage.setItem(LS_SHARED, v?'1':'0');
 
-  async function loadBuffer(url){
-    const res = await fetch(url);
-    const arr = await res.arrayBuffer();
-    return await ctx.decodeAudioData(arr);
-  }
-  async function loadAll(){
-    buffers.whoosh = await loadBuffer('/sfx/whoosh.loop.wav');
-    buffers.tick   = await loadBuffer('/sfx/tick.wav');
-  }
-  async function resumeIfNeeded(){ if (ctx.state === 'suspended') await ctx.resume(); }
+  // ===== UI =====
+  function updateGreeting(){const u=loadUser(); elGreeting.textContent=u?`Xin chào, ${u.name}!`:'Chưa đăng ký';}
+  function updateSpinsUI(){elSpins.textContent=`Lượt còn: ${spins}`; spinBtn.disabled=isSpinning||spins<=0;}
+  const setStatus=msg=>elStatus.textContent=msg;
 
-  function startWhoosh(){
-    if (!buffers.whoosh) return;
-    stopWhooshImmediate();
-    whooshSrc = ctx.createBufferSource();
-    whooshSrc.buffer = buffers.whoosh;
-    whooshSrc.loop = true;
-    whooshSrc.playbackRate.value = 0.9;
-    whooshSrc.connect(whooshGain);
-    const now = ctx.currentTime;
-    whooshGain.gain.cancelScheduledValues(now);
-    whooshGain.gain.setValueAtTime(whooshGain.gain.value, now);
-    whooshGain.gain.linearRampToValueAtTime(0.35, now + 0.18);
-    whooshSrc.start();
-  }
-  function updateWhoosh({gain, rate}){
-    if (!whooshSrc) return;
-    const now = ctx.currentTime;
-    whooshGain.gain.linearRampToValueAtTime(Math.max(0, Math.min(0.6, gain)), now + 0.08);
-    try { whooshSrc.playbackRate.setTargetAtTime(Math.max(0.7, Math.min(1.6, rate)), now, 0.06); } catch(e){}
-  }
-  function stopWhooshSmooth(){
-    if (!whooshSrc) return;
-    const src = whooshSrc; whooshSrc = null;
-    const now = ctx.currentTime;
-    whooshGain.gain.cancelScheduledValues(now);
-    whooshGain.gain.setValueAtTime(whooshGain.gain.value, now);
-    whooshGain.gain.linearRampToValueAtTime(0.0, now + 0.22);
-    try { src.stop(now + 0.25); } catch(e){}
-  }
-  function stopWhooshImmediate(){
-    if (!whooshSrc) return;
-    try { whooshSrc.stop(); } catch(e){}
-    whooshSrc = null;
-  }
-  function playTick(){
-    if (!buffers.tick) return;
-    const src = ctx.createBufferSource();
-    src.buffer = buffers.tick;
-    src.playbackRate.value = 0.975 + Math.random()*0.05;
-    src.connect(tickGain);
-    src.start();
-  }
+  // ===== Modal helpers =====
+  const openModal=()=>{regModal.classList.remove('hidden'); regNameInp.focus({preventScroll:true});}
+  const closeModal=()=>regModal.classList.add('hidden');
 
-  return { loadAll, resumeIfNeeded, startWhoosh, updateWhoosh, stopWhooshSmooth, playTick };
-}
-const audio = createAudio();
-
-/* ============================================================
- * 🔐 ĐĂNG KÝ — localStorage (demo)
- * ============================================================ */
-/** Đọc user từ localStorage */
-function loadUser(){
-  try { return JSON.parse(localStorage.getItem(LS_USER) || 'null'); }
-  catch { return null; }
-}
-/** Ghi user vào localStorage */
-function saveUser(u){
-  user = u;
-  localStorage.setItem(LS_USER, JSON.stringify(u));
-  updateGreetingUI();
-}
-/** Có đăng ký chưa? */
-function isRegistered(){ return !!(user && user.name && user.phone); }
-/** Cập nhật greeting UI */
-function updateGreetingUI(){
-  if (isRegistered()) greetingEl.textContent = `Xin chào, ${user.name}!`;
-  else greetingEl.textContent = 'Chưa đăng ký';
-}
-
-/** Mở/đóng modal đăng ký */
-function openRegModal(){
-  regModal.classList.remove('hidden');
-  regModal.setAttribute('aria-hidden', 'false');
-  regNameEl.focus();
-}
-function closeRegModal(){
-  regModal.classList.add('hidden');
-  regModal.setAttribute('aria-hidden', 'true');
-}
-
-/* ============================================================
- * 🔢 LƯỢT QUAY
- * ============================================================ */
-/** Khởi tạo lượt: lần đầu vào => 1; quay xong => 0; lưu localStorage */
-function initSpinsLocal(){
-  const raw = localStorage.getItem(LS_SPINS);
-  if (raw == null){
-    spinsRemaining = 1; // theo yêu cầu: vào là 1
-    localStorage.setItem(LS_SPINS, String(spinsRemaining));
-  } else {
-    const n = Number(raw);
-    spinsRemaining = Number.isFinite(n) ? n : 1;
-  }
-  updateSpinsUI();
-}
-/** Cập nhật UI & khoá nút nếu hết */
-function updateSpinsUI(){
-  spinsEl.textContent = `Lượt còn: ${spinsRemaining ?? '—'}`;
-  if (spinsRemaining === 0) spinBtn.disabled = true;
-}
-
-/* ============================================================
- * 🎨 HIỂN THỊ — Resize HiDPI
- * ============================================================ */
-function resize(){
-  const rect = wrap.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  for (const c of [wheelCanvas, fxCanvas]){
-    c.width  = Math.floor(rect.width * dpr);
-    c.height = Math.floor(rect.height * dpr);
-    const ctx = c.getContext('2d');
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.scale(dpr, dpr);
-  }
-  drawFx();          // highlight/pointer đứng yên
-  drawWheel(rotation);
-}
-
-/* ============================================================
- * 🚀 KHỞI TẠO
- * ============================================================ */
-async function init(){
-  audio.loadAll().catch(()=>{});
-  user = loadUser();
-
-  const data = await fetch('/api/wheel').then(r=>r.json());
-  slices = data.slices || [];
-  N = Math.max(1, slices.length || 10);
-  sliceAngle = (2*Math.PI)/N;
-
-  initSpinsLocal();
-  updateGreetingUI();
-
-  resize();
-  statusEl.textContent = 'Sẵn sàng';
-}
-init();
-window.addEventListener('resize', resize);
-
-/* ============================================================
- * 🖱️ TƯƠNG TÁC — QUAY
- * ============================================================ */
-spinBtn.addEventListener('click', async () => {
-  // Bắt buộc đăng ký trước khi quay
-  if (!isRegistered()){
-    statusEl.textContent = 'Vui lòng đăng ký để quay.';
-    openRegModal();
-    return;
-  }
-  if (spinsRemaining === 0){
-    statusEl.textContent = 'Bạn đã hết lượt.';
-    return;
-  }
-
-  spinBtn.disabled = true;
-  statusEl.textContent = 'Đang quay...';
-
-  try{
-    await audio.resumeIfNeeded();
-    audio.startWhoosh();
-
-    // Gọi BE lấy kết quả (giữ nguyên endpoint)
-    const res = await fetch('/api/spin', { method:'POST' }).then(r=>r.json());
-    if (res.error) throw new Error(res.error);
-
-    const targetIndex = res.index;
-    const label       = res.label;
-
-    // Góc tâm lát trúng, đưa lên đỉnh (-90°)
-    const targetCenterAngle = targetIndex * sliceAngle + sliceAngle/2;
-    let targetRotation = -Math.PI/2 - targetCenterAngle;
-    while (targetRotation <= rotation + 4*Math.PI) targetRotation += 2*Math.PI;
-
-    await animateTo(targetRotation, 2300);
-    statusEl.textContent = `Kết quả: ${label}`;
-
-    // Sau khi quay xong => lượt về 0
-    spinsRemaining = 0;
-    localStorage.setItem(LS_SPINS, '0');
-    updateSpinsUI();
-  }catch(e){
-    console.error(e);
-    statusEl.textContent = 'Có lỗi, thử lại sau.';
-  }finally{
-    if (spinsRemaining !== 0) spinBtn.disabled = false;
-  }
-});
-
-/* ===== Modal form submit ===== */
-regForm.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  const name  = regNameEl.value.trim();
-  const phone = regPhoneEl.value.trim();
-
-  if (!name || !phone){
-    alert('Vui lòng nhập đủ Họ tên và Số điện thoại.');
-    return;
-  }
-
-  // 👉 Nếu có BE: gọi /api/register ở đây
-  // const ok = await fetch('/api/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ name, phone }) }).then(r=>r.ok);
-  // if (!ok) { alert('Đăng ký thất bại, thử lại.'); return; }
-
-  // Demo FE: lưu localStorage
-  saveUser({ name, phone, registeredAt: Date.now() });
-
-  closeRegModal();
-  statusEl.textContent = 'Đăng ký thành công! Bạn có thể quay ngay.';
-});
-regCancel.addEventListener('click', ()=>{
-  // Bắt buộc đăng ký; nhưng vẫn cho đóng modal nếu cần
-  closeRegModal();
-});
-
-/* ============================================================
- * 🎨 VẼ LỚP QUAY (#wheel)
- * ============================================================ */
-function drawWheel(rot){
-  const { width, height } = wrap.getBoundingClientRect();
-  const cx = width/2, cy = height/2;
-  const rOuter = Math.min(width, height)/2;
-
-  const rim = 18, bevel = 8;
-  const rWheel  = rOuter - 6;
-  const rRimOut = rWheel;
-  const rRimIn  = rWheel - rim;
-  const rSlices = rRimIn - 2;
-  const rHubOut = Math.max(42, rSlices*0.20);
-  const rHubIn  = rHubOut*0.55;
-
-  const ctx = ctxWheel;
-  ctx.clearRect(0,0,width,height);
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(rot);
-
-  ring(ctx, 0,0, rRimIn, rRimOut, goldGradient(ctx, -rRimOut, -rRimOut, rRimOut*2, rRimOut*2));
-  ring(ctx, 0,0, rRimIn - bevel, rRimIn, '#8c6e24');
-
-  for (let i=0;i<N;i++){
-    const start = i*sliceAngle;
-    const end   = start + sliceAngle;
-
-    ctx.beginPath();
-    ctx.moveTo(0,0);
-    ctx.arc(0,0, rSlices, start, end);
-    ctx.closePath();
-
-    const base = sliceColor(i);
-    const grad = ctx.createRadialGradient(0,0, rSlices*0.10, 0,0, rSlices);
-    grad.addColorStop(0,   lighten(base, 0.18));
-    grad.addColorStop(0.55, base);
-    grad.addColorStop(1,   darken(base, 0.12));
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.save();
-    const mid = start + sliceAngle/2;
-    ctx.rotate(mid);
-    ctx.fillStyle = '#111';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.font = '600 14px system-ui';
-    wrapText(ctx, slices[i]?.label ?? `Lát ${i+1}`, rSlices*0.65, 86, 16);
-    ctx.restore();
-  }
-
-  ring(ctx, 0,0, rHubIn*0.9, rHubOut,      chromeGradient(ctx, rHubOut));
-  ring(ctx, 0,0, rHubIn*0.6, rHubIn*0.9,   '#b7b7b7');
-  ring(ctx, 0,0, 0,          rHubIn*0.6,   chromeGradient(ctx, rHubIn*0.8));
-
-  ctx.restore();
-}
-
-/* ============================================================
- * 🎨 VẼ LỚP FX ĐỨNG YÊN (#fx)
- * ============================================================ */
-function drawFx(){
-  const { width, height } = wrap.getBoundingClientRect();
-  const cx = width/2, cy = height/2;
-  const r  = Math.min(width, height)/2;
-
-  const ctx = ctxFx;
-  ctx.clearRect(0,0,width,height);
-
-  const radial = ctx.createRadialGradient(cx - r*0.25, cy - r*0.30, r*0.05, cx - r*0.20, cy - r*0.35, r*0.85);
-  radial.addColorStop(0, 'rgba(255,255,255,0.25)');
-  radial.addColorStop(1, 'rgba(255,255,255,0.0)');
-  ctx.fillStyle = radial;
-  ctx.beginPath(); ctx.arc(cx, cy, r*0.96, 0, 2*Math.PI); ctx.fill();
-
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - r*0.35, r*0.85, r*0.25, 0, 0, Math.PI, true);
-  ctx.closePath();
-  const sheen = ctx.createLinearGradient(cx, cy - r*0.6, cx, cy);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.40)');
-  sheen.addColorStop(1, 'rgba(255,255,255,0.0)');
-  ctx.fillStyle = sheen; ctx.fill();
-
-  const pTopY = cy - r + 6;
-  ctx.beginPath();
-  ctx.moveTo(cx, pTopY);
-  ctx.lineTo(cx - 16, pTopY + 34);
-  ctx.lineTo(cx + 16, pTopY + 34);
-  ctx.closePath();
-  const pointerGrad = ctx.createLinearGradient(cx, pTopY, cx, pTopY+34);
-  pointerGrad.addColorStop(0, '#f6d676');
-  pointerGrad.addColorStop(1, '#c4962a');
-  ctx.fillStyle = pointerGrad;
-  ctx.fill();
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = '#8a6f1f';
-  ctx.stroke();
-}
-
-/* ============================================================
- * 🧭 ANIMATE VỀ GÓC MỤC TIÊU (tick + whoosh)
- * ============================================================ */
-function animateTo(target, durationMs){
-  return new Promise(resolve=>{
-    const startRot = rotation;
-    const delta    = target - startRot;
-    const startT   = performance.now();
-
-    let prevPhaseFloor = Math.floor(( -rotation - Math.PI/2 ) / sliceAngle);
-    let lastTickAt = 0; const TICK_GAP_MS = 70;
-
-    let prevTime = startT;
-    let prevRot  = startRot;
-
-    function frame(now){
-      const t     = Math.min(1, (now - startT) / durationMs);
-      const eased = easeOutCubic(t);
-
-      rotation = startRot + delta * eased;
-      drawWheel(rotation);
-
-      // whoosh theo vận tốc góc
-      const dt    = Math.max(1, now - prevTime) / 1000;
-      const dA    = Math.abs(rotation - prevRot);
-      const omega = dA / dt;
-      const s     = Math.max(0, Math.min(1, omega / 18));
-      audio.updateWhoosh({ gain: 0.20 + 0.40*s, rate: 0.9 + 0.5*s });
-
-      prevTime = now; prevRot = rotation;
-
-      // tick qua ranh lát (kim tại -90°)
-      const phase     = (-rotation - Math.PI/2) / sliceAngle;
-      const currFloor = Math.floor(phase);
-      const crossings = currFloor - prevPhaseFloor;
-      if (crossings !== 0){
-        const nowMs = now;
-        const times = Math.min(3, Math.abs(crossings));
-        for (let i=0;i<times;i++){
-          if (nowMs - lastTickAt >= TICK_GAP_MS){
-            audio.playTick();
-            lastTickAt = nowMs;
-          }
-        }
-        prevPhaseFloor = currFloor;
-      }
-
-      if (t < 1) requestAnimationFrame(frame);
-      else { audio.stopWhooshSmooth(); resolve(); }
+  // ===== Canvas sizing =====
+  function resizeCanvas(){
+    const rect=cvsWheel.getBoundingClientRect();
+    const size=Math.floor(Math.min(rect.width, rect.height||rect.width)*dpr);
+    if(size<=0) return;
+    for(const c of [cvsWheel,cvsFx]){
+      c.width=size; c.height=size; c.style.width=c.style.height=(size/dpr)+'px';
     }
-    requestAnimationFrame(frame);
-  });
-}
-function easeOutCubic(t){ return 1 - Math.pow(1 - t, 3); }
+    drawAll();
+  }
 
-/* ============================================================
- * 🎨 HELPERS — Vẽ & Màu
- * ============================================================ */
-function ring(ctx, x, y, rInner, rOuter, fill){
-  ctx.beginPath();
-  ctx.arc(x, y, rOuter, 0, 2*Math.PI);
-  ctx.arc(x, y, rInner, 0, 2*Math.PI, true);
-  ctx.closePath();
-  ctx.fillStyle = fill;
-  ctx.fill();
-}
-function goldGradient(ctx, x, y, w, h){
-  const g = ctx.createLinearGradient(x, y, x+w, y+h);
-  g.addColorStop(0.00, '#6d5415');
-  g.addColorStop(0.15, '#b08b2b');
-  g.addColorStop(0.32, '#f6d676');
-  g.addColorStop(0.50, '#caa43d');
-  g.addColorStop(0.68, '#f6e08f');
-  g.addColorStop(0.85, '#a27f25');
-  g.addColorStop(1.00, '#6d5415');
-  return g;
-}
-function chromeGradient(ctx, r){
-  const g = ctx.createRadialGradient(0,0, r*0.2, 0,0, r);
-  g.addColorStop(0,   '#ffffff');
-  g.addColorStop(0.3, '#d9d9d9');
-  g.addColorStop(0.6, '#9f9f9f');
-  g.addColorStop(1,   '#eaeaea');
-  return g;
-}
-function sliceColor(i){
-  const palette = ['#f7c56c','#66d2c3','#f27aa7','#7fb0ff','#f39e8b',
-    '#8fe089','#cba7ff','#8dd7f3','#f7b4d9','#f4dd82'];
-  return palette[i % palette.length];
-}
-function lighten(hex, amt=0.15){ return shade(hex, +amt); }
-function darken (hex, amt=0.15){ return shade(hex, -amt); }
-function shade(hex, amt){
-  let c = hex.replace('#','');
-  if (c.length===3) c = c.split('').map(x=>x+x).join('');
-  const num = parseInt(c,16);
-  let r = (num>>16)       + Math.round(255*amt);
-  let g = (num>>8 & 255)  + Math.round(255*amt);
-  let b = (num     & 255) + Math.round(255*amt);
-  r = Math.max(0,Math.min(255,r));
-  g = Math.max(0,Math.min(255,g));
-  b = Math.max(0,Math.min(255,b));
-  return '#' + (1<<24 | r<<16 | g<<8 | b).toString(16).slice(1);
-}
-function wrapText(ctx, text, r, maxWidth, lineHeight){
-  const words = (text||'').split(' ');
-  let line = ''; const lines = [];
-  for (const w of words){
-    const test = line ? line + ' ' + w : w;
-    if (ctx.measureText(test).width > maxWidth){ if (line) lines.push(line); line = w; }
-    else line = test;
+  // ===== Drawing (3D) =====
+  function drawWheel(){
+    const w=cvsWheel.width,h=cvsWheel.height,cx=w/2,cy=h/2;
+    const rOuter=Math.min(cx,cy)-8*dpr;           // mép ngoài vàng
+    const rimWidth=18*dpr;                         // dày viền vàng
+    const rFace=rOuter - rimWidth*0.8;             // bán kính mặt lát
+    const rHub=rFace*0.18;
+
+    ctxWheel.clearRect(0,0,w,h);
+    if(!segments.length) return;
+
+    const n=segments.length, arc=(Math.PI*2)/n;
+
+    ctxWheel.save();
+    ctxWheel.translate(cx,cy);
+    ctxWheel.rotate(rotation);
+
+    // --- RIM kim loại (vàng) ---
+    const rimGrad = ctxWheel.createLinearGradient(0,-rOuter,0,rOuter);
+    rimGrad.addColorStop(0.00, '#FFF7CC');
+    rimGrad.addColorStop(0.30, '#FFD34D');
+    rimGrad.addColorStop(0.60, '#E0A72A');
+    rimGrad.addColorStop(1.00, '#A87610');
+
+    ctxWheel.beginPath();
+    ctxWheel.arc(0,0,rOuter - rimWidth/2, 0, Math.PI*2);
+    ctxWheel.strokeStyle = rimGrad;
+    ctxWheel.lineWidth = rimWidth;
+    ctxWheel.lineCap = 'round';
+    ctxWheel.stroke();
+
+    // highlight đỉnh rim (to hơn theo yêu cầu)
+    const highlightWidth = rimWidth*0.38;
+    const highlightAngle = 0.23*Math.PI;
+    ctxWheel.beginPath();
+    ctxWheel.arc(0,0,rOuter - rimWidth/2, -highlightAngle, +highlightAngle);
+    ctxWheel.strokeStyle='rgba(255,255,255,.68)';
+    ctxWheel.lineWidth=highlightWidth;
+    ctxWheel.stroke();
+
+    // --- LÁT (3D từng lát) ---
+    for(let i=0;i<n;i++){
+      const a0=i*arc, a1=a0+arc, mid=a0+arc/2;
+
+      // 1) Base color
+      ctxWheel.beginPath();
+      ctxWheel.moveTo(0,0);
+      ctxWheel.arc(0,0,rFace,a0,a1);
+      ctxWheel.closePath();
+      ctxWheel.fillStyle = PALETTE[i % PALETTE.length];
+      ctxWheel.fill();
+
+      // 2) “Bevel” theo phương tiếp tuyến: trái sáng, phải tối (nhẹ)
+      ctxWheel.save();
+      ctxWheel.clip();
+      const bevel = ctxWheel.createLinearGradient(-rFace,0,rFace,0);
+      bevel.addColorStop(0.00,'rgba(255,255,255,.16)');
+      bevel.addColorStop(0.50,'rgba(255,255,255,0)');
+      bevel.addColorStop(1.00,'rgba(0,0,0,.16)');
+      ctxWheel.fillStyle = bevel;
+      ctxWheel.fillRect(-rFace,-rFace,rFace*2,rFace*2);
+      ctxWheel.restore();
+
+      // 3) Outer highlight ring (mỏng) trong lát → mép ngoài sáng bóng
+      ctxWheel.save();
+      ctxWheel.clip();
+      ctxWheel.beginPath();
+      ctxWheel.arc(0,0,rFace-2*dpr,0,Math.PI*2);
+      ctxWheel.strokeStyle='rgba(255,255,255,.22)';
+      ctxWheel.lineWidth=6*dpr;
+      ctxWheel.stroke();
+      ctxWheel.restore();
+
+      // 4) Đường chia lát (trắng đậm) để nổi khối
+      ctxWheel.beginPath();
+      ctxWheel.moveTo(0,0);
+      ctxWheel.arc(0,0,rFace,a0,a1);
+      ctxWheel.closePath();
+      ctxWheel.lineWidth = 2*dpr;
+      ctxWheel.strokeStyle = 'rgba(255,255,255,.82)';
+      ctxWheel.stroke();
+
+      // 5) Text
+      ctxWheel.save();
+      ctxWheel.rotate(mid);
+      ctxWheel.translate(rFace*0.68,0);
+      ctxWheel.rotate(Math.PI/2);
+      ctxWheel.fillStyle='#fff';
+      ctxWheel.textAlign='center';
+      ctxWheel.textBaseline='middle';
+      ctxWheel.font=`${Math.round(14*dpr)}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;
+      wrapText(ctxWheel, segments[i].label||`Prize ${i+1}`, 0, 0, rFace*0.52, 18*dpr);
+      ctxWheel.restore();
+    }
+
+    // 6) Vignette toàn mặt: tâm sáng / rìa tối (chiều sâu tổng thể)
+    ctxWheel.save();
+    ctxWheel.beginPath(); ctxWheel.arc(0,0,rFace,0,Math.PI*2); ctxWheel.clip();
+    const shade = ctxWheel.createRadialGradient(0,0,rFace*0.10, 0,0,rFace);
+    shade.addColorStop(0.00,'rgba(255,255,255,.18)');
+    shade.addColorStop(0.60,'rgba(255,255,255,0)');
+    shade.addColorStop(1.00,'rgba(0,0,0,.28)');
+    ctxWheel.fillStyle = shade;
+    ctxWheel.fillRect(-rFace,-rFace,rFace*2,rFace*2);
+    ctxWheel.restore();
+
+    // --- HUB kim loại ---
+    const hub = ctxWheel.createRadialGradient(-rHub*0.35,-rHub*0.35, rHub*0.1, 0,0, rHub);
+    hub.addColorStop(0.00,'#ffffff');
+    hub.addColorStop(0.25,'#ecf0f5');
+    hub.addColorStop(0.62,'#b9c4d1');
+    hub.addColorStop(1.00,'#8d97a4');
+    ctxWheel.beginPath();
+    ctxWheel.arc(0,0,rHub,0,Math.PI*2);
+    ctxWheel.fillStyle=hub; ctxWheel.fill();
+    ctxWheel.lineWidth=3*dpr; ctxWheel.strokeStyle='rgba(0,0,0,.18)'; ctxWheel.stroke();
+
+    // Gloss ring
+    ctxWheel.beginPath();
+    ctxWheel.arc(0,0,rHub*0.62,0,Math.PI*2);
+    ctxWheel.strokeStyle='rgba(255,255,255,.65)';
+    ctxWheel.lineWidth=2*dpr; ctxWheel.stroke();
+
+    ctxWheel.restore();
   }
-  if (line) lines.push(line);
-  ctx.save(); ctx.translate(r - 10, 0);
-  for (let i=0;i<lines.length;i++){
-    ctx.fillText(lines[i], 0, -((lines.length-1)*lineHeight)/2 + i*lineHeight);
+
+  function drawFx(){
+    const w=cvsFx.width,h=cvsFx.height,cx=w/2,cy=h/2;
+    const rOuter=Math.min(cx,cy)-8*dpr;
+    const rimWidth=18*dpr;
+    const rFace=rOuter - rimWidth*0.8;
+
+    ctxFx.clearRect(0,0,w,h);
+
+    // === Pointer vàng: to hơn, kiểu kim loại, có highlight giữa ===
+    ctxFx.save(); ctxFx.translate(cx,cy); ctxFx.rotate(POINTER_ANGLE);
+
+    // Tỷ lệ theo bán kính để “bự hơn”
+    const base = Math.max(rFace*0.11, 30*dpr);   // bề ngang gốc (px)
+    const tip  = Math.max(rFace*0.09, 36*dpr);   // chiều dài nhô ra (px)
+
+    const grad = ctxFx.createLinearGradient(rFace-6*dpr,-base/2, rFace+tip, base/2);
+    grad.addColorStop(0,'#FFF1B3');
+    grad.addColorStop(0.5,'#FFD34D');
+    grad.addColorStop(1,'#C8901A');
+
+    ctxFx.beginPath();
+    ctxFx.moveTo(rFace + tip, 0);      // đỉnh nhọn
+    ctxFx.lineTo(rFace - 6*dpr,  base/2);
+    ctxFx.lineTo(rFace - 6*dpr, -base/2);
+    ctxFx.closePath();
+    ctxFx.fillStyle=grad;
+    ctxFx.shadowColor='rgba(0,0,0,.35)'; ctxFx.shadowBlur=12*dpr; ctxFx.fill();
+
+    // đường highlight giữa pointer (cho cảm giác bevel)
+    ctxFx.beginPath();
+    ctxFx.moveTo(rFace + tip - 6*dpr, 0);
+    ctxFx.lineTo(rFace - 6*dpr + 2*dpr, 0);
+    ctxFx.strokeStyle='rgba(255,255,255,.9)';
+    ctxFx.lineWidth=2*dpr;
+    ctxFx.stroke();
+
+    ctxFx.restore();
+
+    // Glow nhẹ ở tâm
+    ctxFx.beginPath(); ctxFx.arc(cx,cy,rFace*0.25,0,Math.PI*2);
+    const glow=ctxFx.createRadialGradient(cx,cy,0,cx,cy,rFace*0.25);
+    glow.addColorStop(0,'rgba(255,255,255,.16)');
+    glow.addColorStop(1,'rgba(255,255,255,0)');
+    ctxFx.fillStyle=glow; ctxFx.fill();
   }
-  ctx.restore();
-}
+
+  function drawAll(){ drawWheel(); drawFx(); }
+
+  function wrapText(ctx,text,x,y,maxWidth,lineHeight){
+    const words=String(text).split(/\s+/); let line=''; const lines=[];
+    for(const w of words){const t=line?line+' '+w:w; if(ctx.measureText(t).width>maxWidth && line){lines.push(line); line=w;} else line=t;}
+    if(line) lines.push(line);
+    const maxLines=3, startY=y-((Math.min(lines.length,maxLines)-1)*lineHeight)/2;
+    for(let i=0;i<Math.min(lines.length,maxLines);i++) ctx.fillText(lines[i],x,startY+i*lineHeight);
+  }
+
+  // ===== Audio (degrade an toàn) =====
+  async function ensureAudioCtx(){ if(!audioCtx){const AC=window.AudioContext||window.webkitAudioContext; if(AC) audioCtx=new AC();} if(audioCtx&&audioCtx.state==='suspended'){try{await audioCtx.resume()}catch{}}}
+  async function loadBuffer(url){ try{const r=await fetch(url); if(!r.ok) throw 0; const arr=await r.arrayBuffer(); return await new Promise((res,rej)=>audioCtx.decodeAudioData(arr,res,rej)); }catch{return null}}
+  async function initAudio(){ await ensureAudioCtx(); if(!audioCtx) return; if(!whooshBuf) whooshBuf=await loadBuffer('/sfx/whoosh.loop.wav'); if(!tickBuf) tickBuf=await loadBuffer('/sfx/tick.wav'); }
+  function playWhoosh(){ if(!audioCtx||!whooshBuf) return; stopWhoosh(); whooshNode=audioCtx.createBufferSource(); whooshNode.buffer=whooshBuf; whooshNode.loop=true; whooshNode.connect(audioCtx.destination); try{whooshNode.start()}catch{} }
+  function stopWhoosh(){ if(whooshNode){try{whooshNode.stop()}catch{} whooshNode.disconnect()} whooshNode=null; }
+  function playTick(){ if(!audioCtx||!tickBuf) return; const s=audioCtx.createBufferSource(); s.buffer=tickBuf; s.connect(audioCtx.destination); try{s.start()}catch{} }
+
+  // ===== Data =====
+  function fallbackSegments(){ return [
+    {label:'Voucher 10k'},{label:'Chúc may mắn'},{label:'Voucher 20k'},{label:'Chúc may mắn'},
+    {label:'Voucher 50k'},{label:'Chúc may mắn'},{label:'Voucher 100k'},{label:'Chúc may mắn'},
+  ];}
+  async function getWheel(){ try{const r=await fetch(API_WHEEL,{cache:'no-store'}); if(r.ok){const d=await r.json(); if(Array.isArray(d)&&d.length) return d;} }catch{} return fallbackSegments(); }
+  async function postSpin(){ try{const r=await fetch(API_SPIN,{method:'POST'}); if(r.ok){const d=await r.json(); if(typeof d?.index==='number') return d;} }catch{} const i=Math.floor(Math.random()*segments.length); return {index:i,label:segments[i]?.label??''}; }
+
+  // ===== Spin engine (10s) =====
+  function setRotation(angle){
+    const old=rotation; rotation=angle;
+    // tick khi qua ranh
+    const n=segments.length; if(n>0){ const arc=(Math.PI*2)/n; const prev=Math.floor(modTau(old)/arc); const curr=Math.floor(modTau(rotation)/arc); if(curr!==prev) playTick(); }
+    drawAll();
+  }
+  function finishSpin(idx){
+    isSpinning=false;
+    spins=clamp((spins|0)-1,0,99); saveSpins(spins); updateSpinsUI();
+    const prize=segments[idx]?.label??''; setStatus(prize?`Bạn trúng: ${prize}`:'Hoàn tất!');
+  }
+  async function spinToIndex(idx){
+    if(isSpinning) return; isSpinning=true; updateSpinsUI(); setStatus('Đang quay...');
+    await initAudio(); playWhoosh();
+
+    const n=segments.length, arc=(Math.PI*2)/n;
+    const segCenter=idx*arc+arc/2;               // tâm lát
+    const needed=modTau(POINTER_ANGLE - segCenter);
+    const start=rotation, target=start + EXTRA_TURNS*(Math.PI*2) + needed;
+    const t0=performance.now(), dur=SPIN_TOTAL_MS;
+
+    const step=now=>{
+      const t=clamp((now-t0)/dur,0,1), e=easeOutCubic(t);
+      setRotation(start + (target-start)*e);
+      if(t<1) requestAnimationFrame(step); else { stopWhoosh(); finishSpin(idx); }
+    };
+    requestAnimationFrame(step);
+  }
+
+  // ===== Share FB +1 lượt =====
+  function openShare(){
+    if(loadSharedAwarded()){ setStatus('Bạn đã nhận +1 từ chia sẻ.'); return; }
+    const w=window.open('https://www.facebook.com/sharer/sharer.php?u='+encodeURIComponent(SHARE_TARGET_URL),'_blank','width=600,height=500');
+    const iv=setInterval(()=>{
+      if(!w || w.closed){ clearInterval(iv);
+        if(!loadSharedAwarded()){
+          spins=clamp(spins+1,0,99); saveSpins(spins); saveSharedAwarded(true);
+          updateSpinsUI(); setStatus('Đã cộng +1 lượt nhờ chia sẻ. Chúc bạn may mắn!');
+        }
+      }
+    },600);
+  }
+
+  // ===== Init =====
+  async function init(){
+    segments=await getWheel();
+
+    // khởi tạo lượt: vào trang = 1 (nếu chưa từng có); DEV có thể override
+    const stored=loadSpins();
+    if(DEV_MODE && Number.isInteger(DEV_SPINS)) spins=DEV_SPINS;
+    else spins=Number.isInteger(stored)?stored:1;
+    saveSpins(spins);
+
+    updateGreeting(); updateSpinsUI(); setStatus('Sẵn sàng');
+
+    // canvas
+    resizeCanvas(); window.addEventListener('resize', resizeCanvas, {passive:true});
+
+    // events
+    spinBtn.addEventListener('click', async ()=>{
+      if(isSpinning) return;
+      if(!loadUser()){ openModal(); setStatus('Vui lòng đăng ký để quay.'); return; }
+      if(spins<=0){ setStatus('Bạn đã hết lượt.'); return; }
+      await ensureAudioCtx();
+      const res=await postSpin();
+      const idx=clamp(res.index|0,0,segments.length-1);
+      spinToIndex(idx);
+    });
+
+    shareBtn.addEventListener('click', openShare);
+    regCancel.addEventListener('click', ()=>closeModal());
+    regForm.addEventListener('submit', e=>{
+      e.preventDefault();
+      const name=regNameInp.value.trim(), phone=regPhoneInp.value.trim();
+      if(!name||!phone) return;
+      saveUser({name,phone}); updateGreeting(); closeModal();
+      setStatus('Đăng ký thành công! Bạn có thể quay.');
+    });
+
+    // Dev panel
+    if(DEV_MODE){
+      devPanel.classList.add('show');
+      devPanel.addEventListener('click', e=>{
+        const act=e.target?.getAttribute('data-act'); if(!act) return;
+        if(act==='add') spins=clamp(spins+1,0,999);
+        if(act==='zero') spins=0;
+        if(act==='reset'){
+          localStorage.removeItem(LS_USER);
+          localStorage.removeItem(LS_SPINS);
+          localStorage.removeItem(LS_SHARED);
+          spins=1;
+        }
+        saveSpins(spins); updateSpinsUI(); updateGreeting(); setStatus('DEV: cập nhật xong');
+      });
+      window.addEventListener('keydown', ev=>{
+        if(ev.key==='='){spins=clamp(spins+1,0,999); saveSpins(spins); updateSpinsUI();}
+        if(ev.key==='-'){spins=clamp(spins-1,0,999); saveSpins(spins); updateSpinsUI();}
+        if(ev.key==='0'){spins=0; saveSpins(spins); updateSpinsUI();}
+        if(ev.key.toLowerCase()==='r'){
+          localStorage.removeItem(LS_USER); localStorage.removeItem(LS_SPINS); localStorage.removeItem(LS_SHARED);
+          spins=1; saveSpins(spins); updateSpinsUI(); updateGreeting(); setStatus('DEV: reset localStorage');
+        }
+      });
+    }
+  }
+  document.addEventListener('DOMContentLoaded', init);
+})();

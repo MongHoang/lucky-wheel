@@ -3,30 +3,43 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Vòng Xoay May Mắn</title>
-  <link rel="stylesheet" href="/css/main.css" />
+  <title>Vòng Xoay May Mắn — Glass + Blue Button</title>
+  <link rel="stylesheet" href="css/main.css">
 </head>
 <body>
-<main>
-  <h1 style="text-align:center; margin:16px 0 8px;">Vòng Xoay May Mắn</h1>
+<!-- Nền ảnh -->
+<div class="page-bg" aria-hidden="true"></div>
 
-  <div class="wheel-wrap" role="region" aria-label="Vòng quay">
-    <!-- Lớp quay -->
-    <canvas id="wheel" aria-hidden="true"></canvas>
-    <!-- Lớp đứng yên (highlight + pointer) -->
-    <canvas id="fx" aria-hidden="true"></canvas>
-    <!-- Nút Quay ở tâm -->
-    <button id="spinBtn" class="spin-btn" type="button" aria-label="Quay vòng">Quay</button>
-  </div>
+<main class="app-root container">
+  <!-- Greeting -->
+  <header class="hero">
+    <h1 id="greeting" class="hero__title">Chưa đăng ký</h1>
+    <p class="hero__meta">
+      <span id="spins">Lượt còn: —</span>
+      <span class="dot">•</span>
+      <span id="status" class="muted" aria-live="polite">Sẵn sàng</span>
+    </p>
+  </header>
 
-  <div class="info">
-    <p id="greeting" class="greeting">Chưa đăng ký</p>
-    <p id="spins" class="spins">Lượt còn: —</p>
-    <p id="status" class="status" aria-live="polite">Sẵn sàng</p>
-  </div>
+  <!-- Khu vực bánh (glass) -->
+  <section class="stage">
+    <div class="card wheel-card">
+      <div class="wheel-wrap" role="region" aria-label="Vòng quay">
+        <canvas id="wheel" aria-hidden="true"></canvas>
+        <canvas id="fx" aria-hidden="true"></canvas>
+        <button id="spinBtn" class="spin-btn" type="button" aria-label="Quay">Quay</button>
+      </div>
+
+      <div class="actions">
+        <button id="shareBtn" class="btn share" type="button">Chia sẻ Facebook +1 lượt</button>
+      </div>
+
+      <p class="legal">* Chia sẻ một lần để nhận thêm 1 lượt. Sau khi quay xong, lượt trở về 0.</p>
+    </div>
+  </section>
 </main>
 
-<!-- Modal Đăng ký -->
+<!-- Modal đăng ký (ẩn mặc định) -->
 <div id="regModal" class="modal hidden" aria-hidden="true" role="dialog" aria-modal="true">
   <div class="modal__dialog">
     <h2 class="modal__title">Đăng ký để quay</h2>
@@ -48,6 +61,13 @@
   </div>
 </div>
 
-<script src="/js/app.js" defer></script>
+<!-- Dev panel (bật khi ?dev) -->
+<div id="devPanel" class="dev-panel">
+  <button data-act="add">+1 lượt</button>
+  <button data-act="zero">về 0</button>
+  <button data-act="reset">reset</button>
+</div>
+
+<script src="js/app.js" defer></script>
 </body>
 </html>
