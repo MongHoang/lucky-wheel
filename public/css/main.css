@@ -1,7 +1,18 @@
 /* ===== Reset ===== */
 *{box-sizing:border-box}
 html,body{height:100%}
-:root{--text:#e8edf6;--muted:#a7b3c7;--primary:#1769ff; --ticker-h: 40px;}
+:root{
+    --text:#e8edf6;
+    --muted:#a7b3c7;
+    --primary:#1769ff;
+
+    /* ===== TUNE: chiều cao ticker đáy (ảnh hưởng vị trí FAB) ===== */
+    --ticker-h: 40px;
+
+    /* ===== TUNE: kích thước nút liên hệ nổi (FAB) ===== */
+    --fab-size: 64px;   /* 56 → 64 → 72 */
+    --fab-icon: 34px;   /* 28 → 34 → 38 */
+}
 html,body{margin:0;background:transparent}
 body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text)}
 .hidden{display:none!important}
@@ -119,7 +130,7 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
     background:rgba(0,0,0,.55); backdrop-filter: blur(6px);
     border-top:1px solid rgba(255,255,255,.2);
     color:#fff; font-weight:800;
-    overflow:hidden; height:40px; display:flex; align-items:center;
+    overflow:hidden; height:var(--ticker-h); display:flex; align-items:center;
 }
 .ticker__track{ display:flex; gap:24px; white-space:nowrap; will-change:transform; animation:tickerScroll 22s linear infinite; }
 .ticker__item{ padding:0 8px; opacity:.95 }
@@ -134,14 +145,16 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
     z-index:980; /* > ticker(900), < modal(1000) */
 }
 .fab-btn{
-    width:56px; height:56px; border-radius:50%;
+    width:var(--fab-size);
+    height:var(--fab-size);
+    border-radius:50%;
     display:grid; place-items:center; text-decoration:none; user-select:none;
     border:1px solid rgba(255,255,255,.35);
     background:rgba(0,0,0,.15); backdrop-filter:blur(6px);
     box-shadow:0 10px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.18);
     transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
 }
-.fab-btn svg{ width:28px; height:28px; display:block }
+.fab-btn svg{ width:var(--fab-icon); height:var(--fab-icon); display:block }
 .fab-btn:hover{ transform:translateY(-2px); box-shadow:0 14px 30px rgba(0,0,0,.34) }
 .fab-btn:active{ transform:translateY(0); filter:saturate(1.1) }
 
@@ -162,3 +175,11 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
     background: rgba(255,255,255,.18); color:#fff; font-weight:800;
 }
 .dev-panel button:hover{ background: rgba(255,255,255,.28); }
+
+/* Màn nhỏ: thu gọn FAB nếu cần */
+@media (max-width:420px){
+    :root{
+        --fab-size: 56px;
+        --fab-icon: 30px;
+    }
+}

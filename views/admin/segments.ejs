@@ -1,0 +1,60 @@
+<% layout('layout') -%>
+
+<h3>Lát cắt (10 segments, tổng weight=100)</h3>
+
+<table class="table table-sm">
+  <thead><tr><th>#</th><th>Label</th><th>Color</th><th>Weight</th></tr></thead>
+  <tbody id="segBody">
+  <% for (let i=0; i<10; i++) { const s = segs[i]; %>
+  <tr>
+    <td><%= i %></td>
+    <td><input class="form-control" name="label" value="<%= s?.label||'' %>"></td>
+    <td><input class="form-control" name="color" value="<%= s?.color||'' %>" placeholder="#FFD166"></td>
+    <td><input class="form-control" name="weight" value="<%= s?.weight||0 %>" type="number" min="0" max="100"></td>
+    <td><input type="hidden" name="id" value="<%= s?.id||'' %>"></td>
+  </tr>
+  <% } %>
+  </tbody>
+</table>
+
+<div class="mb-3">
+  <button id="btnSave" class="btn btn-primary">Lưu</button>
+  <form class="d-inline" method="post" action="/admin/segments/activate">
+    <input type="hidden" name="wheel_id" value="<%= wheels[0]?.id %>">
+    <button class="btn btn-success">Activate</button>
+  </form>
+</div>
+
+<h4 class="mt-4">Vouchers</h4>
+<p>Chọn lát ở dưới để import mã</p>
+<ul class="list-unstyled">
+  <% if (Array.isArray(segs) && segs.length) { %>
+    <% for (const s of segs) { %>
+      <li>#<%= s.idx %> - <%= s.label %> <a class="ml-2" href="/admin/vouchers/<%= s.id %>">Quản lý mã</a></li>
+    <% } %>
+  <% } else { %>
+    <li class="text-muted">Chưa có lát nào.</li>
+  <% } %>
+</ul>
+
+<script>
+  document.getElementById('btnSave').addEventListener('click', async () => {
+    const rows = document.querySelectorAll('#segBody tr');
+    const data = [];
+    rows.forEach((tr, idx) => {
+      data.push({
+        id: tr.querySelector('input[name=id]').value || null,
+        idx,
+        label: tr.querySelector('input[name=label]').value,
+        color: tr.querySelector('input[name=color]').value || null,
+        weight: parseInt(tr.querySelector('input[name=weight]').value || '0', 10)
+      });
+    });
+    const r = await fetch('/admin/segments/save', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ wheel_id:'<%= wheels[0]?.id %>', segments:data })
+    });
+    if (r.ok) location.reload(); else alert('Lỗi: cần 10 lát và tổng weight=100');
+  });
+</script>

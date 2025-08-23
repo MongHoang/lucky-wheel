@@ -1,0 +1,30 @@
+<% layout('layout') -%>
+<h3>Khách hàng</h3>
+<table class="table table-hover">
+  <thead><tr><th>Thời gian</th><th>Tên</th><th>Điện thoại</th><th>Tỉnh/TP</th><th>Share FB</th></tr></thead>
+  <tbody>
+    <% customers.forEach(c => { %>
+      <tr>
+        <td><%= new Date(c.created_at).toLocaleString('vi-VN') %></td>
+        <td><%= c.name %></td>
+        <td>
+          <% if (user.role==='editor') { %>
+            <span class="phone-mask" data-id="<%= c.id %>"><%= c.phone_mask %></span>
+            <button class="btn btn-xs btn-outline-primary ml-2 reveal" data-id="<%= c.id %>">Xem</button>
+          <% } else { %>
+            <%= c.phone %>
+          <% } %>
+        </td>
+        <td><%= c.province %></td>
+        <td><%= c.shared_fb ? '✅' : '' %></td>
+      </tr>
+    <% }) %>
+  </tbody>
+</table>
+<script>
+$(document).on('click','.reveal', async function(){
+  const id = $(this).data('id');
+  const r = await fetch(`/admin/customers/${id}/reveal-phone`);
+  if (r.ok) { const { phone } = await r.json(); $(this).prev('.phone-mask').text(phone); $(this).remove(); }
+});
+</script>

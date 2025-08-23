@@ -1,0 +1,45 @@
+<% layout('layout') -%>
+<h3>Users</h3>
+
+<table class="table table-striped">
+  <thead>
+  <tr><th>Username</th><th>Tên</th><th>Role</th><th>Kích hoạt</th><th class="text-right">Actions</th></tr>
+  </thead>
+  <tbody>
+  <% users.forEach(u => { %>
+    <tr>
+      <td><code><%= u.username %></code></td>
+      <td><%= u.display_name %></td>
+      <td><span class="badge badge-secondary"><%= u.role %></span></td>
+      <td><%= u.is_active ? '✅' : '❌' %></td>
+      <td class="text-right">
+        <form class="d-inline" method="post" action="/admin/users/<%= u.id %>/toggle">
+          <button class="btn btn-sm btn-outline-secondary">Toggle</button>
+        </form>
+        <% if (user.role==='super_admin' && u.role!=='super_admin') { %>
+          <form class="d-inline" method="post" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Xóa user này?')">
+            <button class="btn btn-sm btn-outline-danger">Xóa</button>
+          </form>
+        <% } %>
+      </td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>
+
+<hr>
+<h5>Tạo user mới</h5>
+<form method="post" action="/admin/users">
+  <div class="form-row">
+    <div class="form-group col-md-3"><input name="username" class="form-control" placeholder="Username" required></div>
+    <div class="form-group col-md-3"><input name="display_name" class="form-control" placeholder="Tên hiển thị" required></div>
+    <div class="form-group col-md-2">
+      <select name="role" class="form-control">
+        <option value="editor">editor</option>
+        <option value="admin">admin</option>
+      </select>
+    </div>
+    <div class="form-group col-md-3"><input name="password" type="password" class="form-control" placeholder="Mật khẩu" required></div>
+    <div class="form-group col-md-1"><button class="btn btn-primary btn-block">Tạo</button></div>
+  </div>
+</form>

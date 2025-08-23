@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="vi"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Đăng nhập</title>
+  <link rel="stylesheet" href="/vendor/admin-lte/css/adminlte.min.css">
+</head><body class="hold-transition login-page">
+<div class="login-box">
+  <div class="card card-outline card-primary">
+    <div class="card-header text-center"><b>Admin</b></div>
+    <div class="card-body">
+      <% if (query && query.err) { %><div class="alert alert-danger">Sai username hoặc mật khẩu</div><% } %>
+      <form method="post" action="/admin/login">
+        <div class="input-group mb-3"><input type="text" class="form-control" placeholder="Username" name="username" required></div>
+        <div class="input-group mb-3"><input type="password" class="form-control" placeholder="Mật khẩu" name="password" required></div>
+        <button class="btn btn-primary btn-block">Đăng nhập</button>
+      </form>
+    </div>
+  </div>
+</div>
+<script src="/vendor/admin-lte/js/adminlte.min.js"></script>
+</body></html>

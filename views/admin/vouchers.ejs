@@ -1,0 +1,21 @@
+<% layout('layout') -%>
+<h3>Vouchers cho: <%= seg.label %> (#<%= seg.idx %>)</h3>
+<form method="post" action="/admin/vouchers/<%= seg.id %>/import">
+  <div class="form-group">
+    <label>Import từ textarea (mỗi dòng 1 code)</label>
+    <textarea class="form-control" name="codes" rows="6" placeholder="CODE123
+CODE456
+..."></textarea>
+  </div>
+  <button class="btn btn-primary">Import</button>
+</form>
+
+<h4 class="mt-4">Danh sách gần đây</h4>
+<table class="table table-sm">
+  <thead><tr><th>Code</th><th>Status</th><th>Assigned to</th><th>SMS</th><th>At</th></tr></thead>
+  <tbody>
+    <% vouchers.forEach(v=>{ %>
+      <tr><td><%= v.code %></td><td><%= v.status %></td><td><%= v.assigned_to||'' %></td><td><%= v.sms_id||'' %></td><td><%= new Date(v.created_at).toLocaleString('vi-VN') %></td></tr>
+    <% }) %>
+  </tbody>
+</table>

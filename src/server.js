@@ -1,10 +1,22 @@
+// src/server.js — production with CSP disabled
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import dotenv from "dotenv";
 import helmet from "helmet";
 import morgan from "morgan";
-import fs from "fs";
+import methodOverride from "method-override";
+import ejsMate from "ejs-mate";
+
+// Sessions/Auth/DB
+import session from "express-session";
+import pgSession from "connect-pg-simple";
+import passport, { seedSuperAdmin } from "./auth.js";
+import { pool } from "./db.js";
+
+// Routers
+import { publicRouter } from "./routes/public.js";
+import adminRoutes from "./routes/admin.js";
 
 dotenv.config();
 
@@ -12,43 +24,64 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-app.use(helmet());
-app.use(morgan("dev"));
-app.use(express.json());
 
-// serve static (trang web 1 trang)
-app.use(express.static(path.join(__dirname, "..", "public")));
+// ===== Views (EJS + ejs-mate) =====
+app.engine("ejs", ejsMate);
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "../views"));
 
-const seedPath = path.join(__dirname, "..", "config", "wheel.json");
-const loadSeed = () => JSON.parse(fs.readFileSync(seedPath, "utf-8"));
+// ===== Core middlewares =====
+app.set("trust proxy", 1);
+app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+app.use(express.json({ limit: "2mb" }));
+app.use(express.urlencoded({ extended: true }));
+app.use(methodOverride("_method"));
 
-// GET /api/wheel -> trả public info (id, label) để client vẽ
-app.get("/api/wheel", (_req, res) => {
-  const seed = loadSeed();
-  const publicSlices = seed.slices.map(({ id, label }) => ({ id, label }));
-  res.json({ version: seed.version, slices: publicSlices });
-});
+// ===== Helmet (CSP OFF in production per your request) =====
+app.use(helmet({ contentSecurityPolicy: false }));
 
-// POST /api/spin -> chọn theo trọng số (POC, chưa lock tồn kho/credit)
-app.post("/api/spin", (_req, res) => {
-  const seed = loadSeed();
-  const weights = seed.slices.map(s => s.weight ?? 1);
-  const index = pickWeighted(weights);
-  const slice = seed.slices[index];
-  res.json({ index, sliceId: slice.id, label: slice.label });
-});
+// ===== Session + Passport (store session in Postgres) =====
+const PgStore = pgSession(session);
+const maxAgeMs = (parseInt(process.env.SESSION_MAX_AGE_MIN || "30", 10)) * 60 * 1000;
 
-function pickWeighted(weights) {
-  const total = weights.reduce((a, b) => a + b, 0);
-  let r = Math.random() * total;
-  for (let i = 0; i < weights.length; i++) {
-    r -= weights[i];
-    if (r < 0) return i;
-  }
-  return weights.length - 1;
-}
+app.use(
+    session({
+        store: new PgStore({ pool, tableName: "session", createTableIfMissing: true }),
+        name: "sid",
+        secret: process.env.SESSION_SECRET,
+        resave: false,
+        saveUninitialized: false,
+        cookie: {
+            secure: process.env.NODE_ENV === "production", // secure cookie in prod
+            httpOnly: true,
+            sameSite: "lax",
+            maxAge: maxAgeMs,
+        },
+        rolling: true, // refresh cookie on activity (idle timeout)
+    })
+);
 
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ===== Serve your existing FE (no need to move files) =====
+const STATIC_DIR = process.env.STATIC_DIR
+    ? path.resolve(__dirname, "..", process.env.STATIC_DIR)
+    : path.join(__dirname, "..", "public");
+
+app.use(express.static(STATIC_DIR));
+app.get("/", (_req, res) => res.sendFile(path.join(STATIC_DIR, "index.html")));
+
+// ===== Public API for the wheel FE =====
+app.use(publicRouter); // /api/wheel, /api/spin, /api/notify-win, ...
+
+// ===== Admin UI (EJS + AdminLTE) =====
+app.use("/admin", adminRoutes);
+
+// ===== Start server =====
 const port = process.env.PORT || 3000;
-app.listen(port, () => {
-  console.log(`🌐 http://localhost:${port}`);
+app.listen(port, async () => {
+    await seedSuperAdmin(); // create default super admin from .env if missing
+    console.log(`🌐 http://localhost:${port}`);
+    console.log(`   FE static: ${STATIC_DIR}`);
 });

@@ -1,38 +1,61 @@
 /* Lucky Wheel 3D — "Suspense + Contact FAB + Ticker + eSMS notify"
-   - 1-pha easing, đầu nhanh hơn, cuối hãm dài hơn (EASE_POWER=2.4, 13s, 6 vòng)
-   - Kim đỏ ở dưới, viền vàng + bóng đèn chớp, chân đế đẹp
-   - Popup trúng: confetti + âm vỗ tay
-   - Nút QUAY in hoa
-   - FAB Zalo/Messenger nổi góc phải (icon)
-   - Banner chạy, online ngẫu nhiên
-   - Form đăng ký: thêm Tỉnh/TP dropdown, SĐT kiểu số
-   - Gọi API backend /api/notify-win để server gọi eSMS (bảo mật key)
-*/
+   Giữ nguyên tính năng, bổ sung đẩy chữ gần vành + tự đổi màu chữ.
+
+===================== TUNING CHEATSHEET (đọc nhanh) =====================
+[Spin feel]
+- SPIN_TOTAL_MS (ms): tổng thời gian quay. ↑ 14000–15000 để "chậm thêm".
+- EASE_POWER (>1): 2.2–2.6. ↓ về 2.2 để kéo dài pha chậm cuối.
+- EXTRA_TURNS (vòng): 6→7 làm pha đầu "vèo" nhanh hơn.
+
+[Pointer]
+- POINTER_ANGLE (rad): π/2 = kim dưới; -π/2 = kim trên.
+
+[Âm thanh]
+- /sfx/tick.wav: tick khi qua ranh; /sfx/applause.wav: vỗ tay trúng.
+- Tắt applause: comment playApplause() trong openWinModal().
+
+[Đèn & viền]
+- BULB_COUNT, BLINK_MS; BLINK_DURING_SPIN=true để vẫn chớp khi quay.
+- REDUCE_SHADOWS_WHILE_SPIN=true để mượt hơn.
+
+[Màu lát]
+- Đổi trong PALETTE.
+
+[Chữ trên lát]
+- TEXT_RADIAL: đẩy chữ ra gần vành; TEXT_MAX_W_RATIO: bề rộng; TEXT_LINE_H; TEXT_STROKE_SCALE.
+- TEXT_DYNAMIC_COLOR: tự đổi trắng/đen theo độ sáng lát (true/false).
+======================================================================= */
 (() => {
-  // ===== Config & keys =====
-  const LS_USER='lw_user', LS_SPINS='lw_spins', LS_SHARED='lw_shared_awarded';
-  const API_WHEEL='/api/wheel', API_SPIN='/api/spin';
-  const API_NOTIFY='/api/notify-win'; // <-- server của bạn sẽ gọi eSMS
+  // ====== NÚM VẶN CHÍNH ======
+  const SPIN_TOTAL_MS = 13000;
+  const EXTRA_TURNS   = 6;
+  const EASE_POWER    = 2.4;
+  const POINTER_ANGLE = Math.PI/2;
 
-  // Spin timing — 1-pha (đầu nhanh hơn, cuối hãm dài hơn)
-  const SPIN_TOTAL_MS = 13000;   // 13s
-  const EXTRA_TURNS   = 6;       // thêm vòng nhanh để cảm giác "vèo"
-  const EASE_POWER    = 2.4;     // >2 → tốc đầu lớn hơn, hãm dài
-  const POINTER_ANGLE = Math.PI/2; // kim ở DƯỚI, chĩa lên trong
-
-  // Bóng đèn
+  // Đèn viền
   const BULB_COUNT=28;
   const BLINK_MS=520;
 
-  // Tối ưu khi đang quay
+  // Khi quay, tối ưu hiệu năng
   const BLINK_DURING_SPIN = false;
   const REDUCE_SHADOWS_WHILE_SPIN = true;
   const STROKE_TEXT_WHILE_SPIN = false;
 
-  // Liên hệ
+  // ==== TUNE: text trên lát ====
+  const TEXT_RADIAL = 0.76;           // 0.68 cũ → gần vành hơn
+  const TEXT_MAX_W_RATIO = 0.46;      // thu hẹp để không chạm mép
+  const TEXT_LINE_H = 1.08;           // line-height gọn
+  const TEXT_STROKE_SCALE = 0.14;     // độ dày viền chữ = fontPx * scale
+  const TEXT_DYNAMIC_COLOR = true;    // auto trắng/đen theo độ sáng lát
+
+  // Liên hệ (điền ID thật)
   const ZALO_URL='https://zalo.me/yourZaloID';
   const MESSENGER_URL='https://m.me/yourPageID';
 
+  // API
+  const LS_USER='lw_user', LS_SPINS='lw_spins', LS_SHARED='lw_shared_awarded';
+  const API_WHEEL='/api/wheel', API_SPIN='/api/spin';
+  const API_NOTIFY='/api/notify-win';
   const SHARE_TARGET_URL='https://example.com/your-post';
 
   // ===== DOM =====
@@ -55,12 +78,8 @@
   const winModal=document.getElementById('winModal');
   const winText=document.getElementById('winText');
   const winOk=document.getElementById('winOk');
-
   const fabZalo=document.getElementById('fabZalo');
   const fabMess=document.getElementById('fabMess');
-
-  // Ticker
-  const ticker=document.getElementById('ticker');
   const tickerTrack=document.getElementById('tickerTrack');
 
   // ===== Canvas =====
@@ -76,25 +95,27 @@
 
   // ===== Utils =====
   const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-  const modTau=a=>{const TAU=Math.PI*2; return ((a%TAU)+TAU)%TAU;}
   const TAU=Math.PI*2;
+  const modTau=a=>((a%TAU)+TAU)%TAU;
   const easeOut = t => 1 - Math.pow(1 - t, EASE_POWER);
   const q=new URLSearchParams(location.search);
   const DEV_MODE=q.has('dev'); const DEV_SPINS=q.get('spins')?parseInt(q.get('spins'),10):null;
 
-  // Palette
+  // màu lát
   const PALETTE = ['#FF8A80','#9CC7FF','#B7E27A','#FFB285','#CFA9FF','#8ED1FF','#FFD166','#EF476F'];
 
-  // VN Provinces (63)
-  const VN_PROVINCES=[
-    "An Giang","Bà Rịa - Vũng Tàu","Bắc Giang","Bắc Kạn","Bạc Liêu","Bắc Ninh","Bến Tre","Bình Định","Bình Dương",
+  // hỗ trợ màu chữ động
+  const hexToRgb = (h)=>{ h=h.replace('#',''); if(h.length===3) h=h.split('').map(c=>c+c).join(''); const n=parseInt(h,16); return {r:(n>>16)&255,g:(n>>8)&255,b:n&255}; };
+  const brightness = ({r,g,b}) => 0.299*r + 0.587*g + 0.114*b;
+
+  // Tỉnh/TP
+  const VN_PROVINCES=[ "An Giang","Bà Rịa - Vũng Tàu","Bắc Giang","Bắc Kạn","Bạc Liêu","Bắc Ninh","Bến Tre","Bình Định","Bình Dương",
     "Bình Phước","Bình Thuận","Cà Mau","Cần Thơ","Cao Bằng","Đà Nẵng","Đắk Lắk","Đắk Nông","Điện Biên","Đồng Nai",
     "Đồng Tháp","Gia Lai","Hà Giang","Hà Nam","Hà Nội","Hà Tĩnh","Hải Dương","Hải Phòng","Hậu Giang","Hòa Bình",
     "Hưng Yên","Khánh Hòa","Kiên Giang","Kon Tum","Lai Châu","Lâm Đồng","Lạng Sơn","Lào Cai","Long An","Nam Định",
     "Nghệ An","Ninh Bình","Ninh Thuận","Phú Thọ","Phú Yên","Quảng Bình","Quảng Nam","Quảng Ngãi","Quảng Ninh",
     "Quảng Trị","Sóc Trăng","Sơn La","Tây Ninh","Thái Bình","Thái Nguyên","Thanh Hóa","Thừa Thiên Huế","Tiền Giang",
-    "TP. Hồ Chí Minh","Trà Vinh","Tuyên Quang","Vĩnh Long","Vĩnh Phúc","Yên Bái"
-  ];
+    "TP. Hồ Chí Minh","Trà Vinh","Tuyên Quang","Vĩnh Long","Vĩnh Phúc","Yên Bái" ];
 
   // ===== Storage =====
   const loadUser=()=>{try{const r=localStorage.getItem(LS_USER);return r?JSON.parse(r):null;}catch{return null}};
@@ -169,20 +190,18 @@
     drawAll(true);
   }
 
-  // ===== Label helper (uppercase + stroke) =====
-  function drawWrappedLabel(ctx,text,x,y,maxWidth,lineHeight,fontPx){
+  // ===== Label helper (uppercase + stroke độ dày tự chọn) =====
+  function drawWrappedLabel(ctx, text, x, y, maxWidth, lineHeight, fontPx, strokeScale=0.12){
     const t=String(text).toUpperCase();
     const words=t.split(/\s+/); let line=''; const lines=[];
     for(const w of words){const test=line?line+' '+w:w; if(ctx.measureText(test).width>maxWidth && line){lines.push(line); line=w;} else line=test;}
     if(line) lines.push(line);
     const used=Math.min(lines.length,3); const startY=y-((used-1)*lineHeight)/2;
     ctx.lineJoin='round'; ctx.miterLimit=2;
-    ctx.fillStyle='#fff';
     for(let i=0;i<used;i++){
       const yy=startY+i*lineHeight;
       if(!isSpinning || STROKE_TEXT_WHILE_SPIN){
-        ctx.strokeStyle='rgba(0,0,0,.65)';
-        ctx.lineWidth=Math.max(2*dpr,fontPx*0.12);
+        ctx.lineWidth=Math.max(2*dpr, fontPx*strokeScale);
         ctx.strokeText(lines[i],x,yy);
       }
       ctx.fillText(lines[i],x,yy);
@@ -212,7 +231,8 @@
     ctxWheel.strokeStyle = rimGrad; ctxWheel.lineWidth = rimWidth; ctxWheel.lineCap = 'round'; ctxWheel.stroke();
 
     // highlight đỉnh rim
-    const highlightWidth = rimWidth*0.38, highlightAngle = 0.23*Math.PI;
+    const highlightWidth = rimWidth*0.38;
+    const highlightAngle = 0.23*Math.PI;
     ctxWheel.beginPath(); ctxWheel.arc(0,0,rOuter - rimWidth/2, -highlightAngle, +highlightAngle);
     ctxWheel.strokeStyle='rgba(255,255,255,.68)'; ctxWheel.lineWidth=highlightWidth; ctxWheel.stroke();
 
@@ -226,39 +246,74 @@
       // bevel
       ctxWheel.save(); ctxWheel.clip();
       const bevel = ctxWheel.createLinearGradient(-rFace,0,rFace,0);
-      bevel.addColorStop(0.00,'rgba(255,255,255,.16)'); bevel.addColorStop(0.50,'rgba(255,255,255,0)'); bevel.addColorStop(1.00,'rgba(0,0,0,.16)');
+      bevel.addColorStop(0.00,'rgba(255,255,255,.16)');
+      bevel.addColorStop(0.50,'rgba(255,255,255,0)');
+      bevel.addColorStop(1.00,'rgba(0,0,0,.16)');
       ctxWheel.fillStyle = bevel; ctxWheel.fillRect(-rFace,-rFace,rFace*2,rFace*2); ctxWheel.restore();
 
       // outer ring
       ctxWheel.save(); ctxWheel.clip(); ctxWheel.beginPath(); ctxWheel.arc(0,0,rFace-2*dpr,0,TAU);
-      ctxWheel.strokeStyle='rgba(255,255,255,.22)'; ctxWheel.lineWidth=6*dpr; ctxWheel.stroke(); ctxWheel.restore();
+      ctxWheel.strokeStyle='rgba(255,255,255,.22)';
+      ctxWheel.lineWidth=6*dpr;
+      ctxWheel.stroke(); ctxWheel.restore();
 
       // ranh lát
       ctxWheel.beginPath(); ctxWheel.moveTo(0,0); ctxWheel.arc(0,0,rFace,a0,a1); ctxWheel.closePath();
-      ctxWheel.lineWidth = 2*dpr; ctxWheel.strokeStyle = 'rgba(255,255,255,.82)'; ctxWheel.stroke();
+      ctxWheel.lineWidth = 2*dpr;
+      ctxWheel.strokeStyle = 'rgba(255,255,255,.82)';
+      ctxWheel.stroke();
 
-      // text
-      ctxWheel.save(); ctxWheel.rotate(mid); ctxWheel.translate(rFace*0.68,0); ctxWheel.rotate(Math.PI/2);
-      ctxWheel.textAlign='center'; ctxWheel.textBaseline='middle';
+      // --- text (ra gần vành + màu động) ---
+      ctxWheel.save();
+      ctxWheel.rotate(mid);
+      ctxWheel.translate(rFace * TEXT_RADIAL, 0);
+      ctxWheel.rotate(Math.PI/2);
+      ctxWheel.textAlign='center';
+      ctxWheel.textBaseline='middle';
+
       const fontPx = Math.round(Math.max(16*dpr, Math.min(24*dpr, rFace*0.095)));
+      let fillColor = '#fff', strokeColor = 'rgba(0,0,0,.68)';
+      if(TEXT_DYNAMIC_COLOR){
+        const rgb=hexToRgb(PALETTE[i % PALETTE.length]);
+        if(brightness(rgb) > 185){ // lát quá sáng → chữ đậm
+          fillColor = '#1b2230';
+          strokeColor = 'rgba(255,255,255,.72)';
+        }
+      }
       ctxWheel.font=`800 ${fontPx}px system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif`;
-      drawWrappedLabel(ctxWheel, segments[i].label||`Prize ${i+1}`, 0, 0, rFace*0.52, fontPx*1.12, fontPx);
+      ctxWheel.fillStyle = fillColor;
+      ctxWheel.strokeStyle = strokeColor;
+
+      drawWrappedLabel(
+          ctxWheel,
+          segments[i].label||`Prize ${i+1}`,
+          0, 0,
+          rFace * TEXT_MAX_W_RATIO,
+          fontPx * TEXT_LINE_H,
+          fontPx,
+          TEXT_STROKE_SCALE
+      );
       ctxWheel.restore();
     }
 
     // Vignette
     ctxWheel.save(); ctxWheel.beginPath(); ctxWheel.arc(0,0,rFace,0,TAU); ctxWheel.clip();
     const shade = ctxWheel.createRadialGradient(0,0,rFace*0.10, 0,0,rFace);
-    shade.addColorStop(0.00,'rgba(255,255,255,.18)'); shade.addColorStop(0.60,'rgba(255,255,255,0)'); shade.addColorStop(1.00,'rgba(0,0,0,.28)');
+    shade.addColorStop(0.00,'rgba(255,255,255,.18)');
+    shade.addColorStop(0.60,'rgba(255,255,255,0)');
+    shade.addColorStop(1.00,'rgba(0,0,0,.28)');
     ctxWheel.fillStyle = shade; ctxWheel.fillRect(-rFace,-rFace,rFace*2,rFace*2); ctxWheel.restore();
 
     // Hub
     const hub = ctxWheel.createRadialGradient(-rHub*0.35,-rHub*0.35, rHub*0.1, 0,0, rHub);
-    hub.addColorStop(0.00,'#ffffff'); hub.addColorStop(0.25,'#ecf0f5'); hub.addColorStop(0.62,'#b9c4d1'); hub.addColorStop(1.00,'#8d97a4');
+    hub.addColorStop(0.00,'#ffffff');
+    hub.addColorStop(0.25,'#ecf0f5');
+    hub.addColorStop(0.62,'#b9c4d1');
+    hub.addColorStop(1.00,'#8d97a4');
     ctxWheel.beginPath(); ctxWheel.arc(0,0,rHub,0,TAU); ctxWheel.fillStyle=hub; ctxWheel.fill();
     ctxWheel.lineWidth=3*dpr; ctxWheel.strokeStyle='rgba(0,0,0,.18)'; ctxWheel.stroke();
-    ctxWheel.beginPath(); ctxWheel.arc(0,0,rHub*0.62,0,TAU); ctxWheel.strokeStyle='rgba(255,255,255,.65)';
-    ctxWheel.lineWidth=2*dpr; ctxWheel.stroke();
+    ctxWheel.beginPath(); ctxWheel.arc(0,0,rHub*0.62,0,TAU);
+    ctxWheel.strokeStyle='rgba(255,255,255,.65)'; ctxWheel.lineWidth=2*dpr; ctxWheel.stroke();
 
     // Bóng đèn chớp tắt
     const rb = rOuter - rimWidth/2, bulbR = rimWidth*0.33;
@@ -272,9 +327,7 @@
       if(on){
         if(!(isSpinning && REDUCE_SHADOWS_WHILE_SPIN)){
           ctxWheel.shadowColor='rgba(255,219,77,.55)'; ctxWheel.shadowBlur=bulbR*2.2;
-        }else{
-          ctxWheel.shadowBlur=0;
-        }
+        }else{ ctxWheel.shadowBlur=0; }
         const g=ctxWheel.createRadialGradient(0,0,bulbR*0.15,0,0,bulbR);
         g.addColorStop(0,'#ffffff'); g.addColorStop(0.45,'#FFF6C6'); g.addColorStop(1,'#F2B614');
         ctxWheel.beginPath(); ctxWheel.arc(0,0,bulbR,0,TAU); ctxWheel.fillStyle=g; ctxWheel.fill();
@@ -398,21 +451,21 @@
       await fetch(API_NOTIFY, {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({
-          name: u.name||'',
-          phone: u.phone||'',
-          province: u.province||'',
-          prize: prize||''
-        })
+        body: JSON.stringify({ name:u.name||'', phone:u.phone||'', province:u.province||'', prize:prize||'' })
       });
     }catch(err){ /* im lặng */ }
   }
 
-  // ===== Spin engine (1-pha) =====
+  // ===== Spin engine =====
   function setRotation(angle){
     const old=rotation; rotation=angle;
     // tick khi qua ranh
-    const n=segments.length; if(n>0){ const arc=(TAU)/n; const prev=Math.floor(modTau(old)/arc); const curr=Math.floor(modTau(rotation)/arc); if(curr!==prev) playTick(); }
+    const n=segments.length; if(n>0){
+      const arc=(TAU)/n;
+      const prev=Math.floor(modTau(old)/arc);
+      const curr=Math.floor(modTau(rotation)/arc);
+      if(curr!==prev) playTick();
+    }
     drawBase(); drawWheel(); drawFx();
   }
   function finishSpin(idx){
@@ -421,8 +474,7 @@
     const prize=segments[idx]?.label??'';
     setStatus(prize?`Bạn trúng: ${prize}`:'Hoàn tất!');
     openWinModal(prize?`Bạn trúng: ${prize}`:'Bạn đã hoàn tất lượt quay!');
-    notifyWin(prize); // <-- gọi backend để SMS qua eSMS
-    // bật lại loop nháy
+    notifyWin(prize);
     if(animId) cancelAnimationFrame(animId);
     animId=requestAnimationFrame(function loop(){ drawWheel(); drawFx(); animId=requestAnimationFrame(loop); });
   }
@@ -440,8 +492,8 @@
     const t0=performance.now(), dur=SPIN_TOTAL_MS;
 
     const step=now=>{
-      const t=Math.max(0, Math.min(1,(now-t0)/dur));   // 0..1
-      const e=easeOut(t);                               // 1-pha
+      const t=Math.max(0, Math.min(1,(now-t0)/dur));
+      const e=easeOut(t);
       setRotation(start + (target-start)*e);
       if(t<1) requestAnimationFrame(step); else finishSpin(idx);
     };
@@ -460,28 +512,26 @@
     }},600);
   }
 
-  // ===== Ticker (banner chạy) =====
+  // ===== Ticker =====
   function buildTickerItems(){
     const names=["Nguyễn An","Trần Bình","Lê Chi","Phạm Dũng","Huỳnh Giang","Võ Hạnh","Đặng Khôi","Bùi Linh","Đỗ Minh","Phan Ngọc","Trương Oanh","Hồ Phúc","Tạ Quân","Ngô Ri","Dương Sơn","Lý Trang","Vũ Uyên","Kiều Vy","Châu Yến","Mai Gia"];
     const prizes=(segments.length?segments.map(s=>s.label):["Voucher 10k","Voucher 20k","Voucher 50k","Voucher 100k","Chúc may mắn"]).filter(Boolean);
     const pick=()=>names[(Math.random()*names.length)|0]+" vừa trúng "+prizes[(Math.random()*prizes.length)|0];
     const items=Array.from({length:12},()=>pick());
     const html=items.map(t=>`<span class="ticker__item">🔔 ${t}</span>`).join("");
-    tickerTrack.innerHTML = html + html; // nhân đôi để scroll vô hạn êm
+    tickerTrack.innerHTML = html + html;
   }
-  function refreshTickerPeriodically(){
-    setInterval(buildTickerItems, 20000);
-  }
+  function refreshTickerPeriodically(){ setInterval(buildTickerItems, 20000); }
 
-  // ===== Online (random + dao động nhẹ) =====
+  // ===== Online (random) =====
   function initOnline(){
-    let online=40+Math.floor(Math.random()*120); // 40..159
+    let online=40+Math.floor(Math.random()*120);
     const render=()=>{ elOnline.textContent=`Đang online: ${online}`; };
     render();
     setInterval(()=>{ online = clamp(online + (Math.random()<0.5?-1:1)*(1+Math.floor(Math.random()*2)), 20, 300); render(); }, 8000);
   }
 
-  // ===== Init form (province + số điện thoại số) =====
+  // ===== Init form =====
   function initForm(){
     for(const p of VN_PROVINCES){
       const opt=document.createElement('option'); opt.value=opt.textContent=p; regProvinceSel.appendChild(opt);
