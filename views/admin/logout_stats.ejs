@@ -1,0 +1,14 @@
+<% layout && layout('layout') %>
+<h3>Tự logout theo tuần</h3>
+<table class="table table-sm">
+  <thead><tr><th>Tuần (bắt đầu)</th><th>User</th><th>Số lần</th></tr></thead>
+  <tbody>
+  <% (rows || []).forEach(function(r){ %>
+    <tr>
+      <td><%= new Date(r.week).toLocaleDateString('vi-VN') %></td>
+      <td><%= r.user_name %></td>
+      <td><%= r.times %></td>
+    </tr>
+  <% }) %>
+  </tbody>
+</table>

@@ -1,24 +1,46 @@
 <% layout('layout') -%>
-<h3>Users</h3>
 
-<table class="table table-striped">
-  <thead>
-  <tr><th>Username</th><th>Tên</th><th>Role</th><th>Kích hoạt</th><th class="text-right">Actions</th></tr>
+<h3 class="mb-3">Users</h3>
+
+<table class="table table-hover">
+  <thead class="thead-light">
+  <tr>
+    <th>Username</th>
+    <th>Tên</th>
+    <th>Role</th>
+    <th>Kích hoạt</th>
+    <th>Auto logout (7 ngày)</th>
+    <th class="text-right">Actions</th>
+  </tr>
   </thead>
   <tbody>
-  <% users.forEach(u => { %>
+  <% (users || []).forEach(u => { %>
     <tr>
-      <td><code><%= u.username %></code></td>
+      <td><span class="text-monospace text-primary"><%= u.username %></span></td>
       <td><%= u.display_name %></td>
       <td><span class="badge badge-secondary"><%= u.role %></span></td>
-      <td><%= u.is_active ? '✅' : '❌' %></td>
+      <td>
+        <% if (u.is_active) { %>
+          <i class="far fa-check-square text-success"></i>
+        <% } else { %>
+          <i class="far fa-square text-muted"></i>
+        <% } %>
+      </td>
+      <td>
+        <% if ((u.auto_week||0) > 0) { %>
+          <a href="/admin/users/<%= u.id %>/auto-logout" class="badge badge-info"><%= u.auto_week %></a>
+        <% } else { %>
+          <span class="text-muted">0</span>
+        <% } %>
+      </td>
       <td class="text-right">
-        <form class="d-inline" method="post" action="/admin/users/<%= u.id %>/toggle">
+        <form method="post" action="/admin/users/<%= u.id %>/toggle" class="d-inline">
           <button class="btn btn-sm btn-outline-secondary">Toggle</button>
         </form>
-        <% if (user.role==='super_admin' && u.role!=='super_admin') { %>
-          <form class="d-inline" method="post" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Xóa user này?')">
-            <button class="btn btn-sm btn-outline-danger">Xóa</button>
+        <% if (u.role !== 'super_admin') { %>
+          <form method="post" action="/admin/users/<%= u.id %>/delete" class="d-inline"
+                onsubmit="return confirm('Xóa user này?');">
+            <button class="btn btn-sm btn-danger">Xóa</button>
           </form>
         <% } %>
       </td>
@@ -27,19 +49,25 @@
   </tbody>
 </table>
 
-<hr>
-<h5>Tạo user mới</h5>
-<form method="post" action="/admin/users">
-  <div class="form-row">
-    <div class="form-group col-md-3"><input name="username" class="form-control" placeholder="Username" required></div>
-    <div class="form-group col-md-3"><input name="display_name" class="form-control" placeholder="Tên hiển thị" required></div>
-    <div class="form-group col-md-2">
-      <select name="role" class="form-control">
-        <option value="editor">editor</option>
-        <option value="admin">admin</option>
-      </select>
-    </div>
-    <div class="form-group col-md-3"><input name="password" type="password" class="form-control" placeholder="Mật khẩu" required></div>
-    <div class="form-group col-md-1"><button class="btn btn-primary btn-block">Tạo</button></div>
+<h4 class="mt-4">Tạo user mới</h4>
+<form method="post" action="/admin/users" class="form-row">
+  <div class="form-group col-md-3">
+    <input name="username" class="form-control" placeholder="username" required>
+  </div>
+  <div class="form-group col-md-3">
+    <input name="display_name" class="form-control" placeholder="Tên hiển thị" required>
+  </div>
+  <div class="form-group col-md-3">
+    <select name="role" class="form-control">
+      <option value="editor">editor</option>
+      <option value="admin">admin</option>
+      <option value="super_admin">super_admin</option>
+    </select>
+  </div>
+  <div class="form-group col-md-3">
+    <input type="password" name="password" class="form-control" placeholder="mật khẩu" required>
+  </div>
+  <div class="form-group col-12">
+    <button class="btn btn-primary">Tạo</button>
   </div>
 </form>

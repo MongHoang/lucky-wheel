@@ -1,30 +1,171 @@
 <% layout('layout') -%>
-<h3>Khách hàng</h3>
-<table class="table table-hover">
-  <thead><tr><th>Thời gian</th><th>Tên</th><th>Điện thoại</th><th>Tỉnh/TP</th><th>Share FB</th></tr></thead>
-  <tbody>
+
+<h3 class="mb-3">Khách hàng</h3>
+
+<!-- Filters -->
+<form class="card card-body mb-3" method="get" action="/admin/customers">
+    <div class="form-row">
+        <div class="form-group col-md-3">
+            <label>Tìm (Tên/Điện thoại)</label>
+            <input type="text" name="q" value="<%= q || '' %>" class="form-control" placeholder="nhập tên hoặc số...">
+        </div>
+        <div class="form-group col-md-2">
+            <label>Tỉnh/TP</label>
+            <select name="province" class="form-control">
+                <option value="">— Tất cả —</option>
+                <% (provinces || []).forEach(p => { %>
+                    <option value="<%= p %>" <%= province===p ? 'selected' : '' %>><%= p %></option>
+                <% }) %>
+            </select>
+        </div>
+        <div class="form-group col-md-2">
+            <label>Share FB</label>
+            <select name="shared" class="form-control">
+                <option value=""  <%= shared==='' ? 'selected' : '' %>>— Tất cả —</option>
+                <option value="1" <%= shared==='1' ? 'selected' : '' %>>Có</option>
+                <option value="0" <%= shared==='0' ? 'selected' : '' %>>Không</option>
+            </select>
+        </div>
+        <div class="form-group col-md-2">
+            <label>Từ ngày</label>
+            <input type="date" name="from" value="<%= from || '' %>" class="form-control">
+        </div>
+        <div class="form-group col-md-2">
+            <label>Đến ngày</label>
+            <input type="date" name="to" value="<%= to || '' %>" class="form-control">
+        </div>
+        <div class="form-group col-md-1 d-flex align-items-end">
+            <button class="btn btn-primary btn-block"><i class="fas fa-search mr-1"></i>Lọc</button>
+        </div>
+    </div>
+</form>
+
+<!-- Toolbar -->
+<div class="d-flex align-items-center justify-content-between mb-2">
+    <div>
+        <small class="text-muted">Tổng: <strong><%= total %></strong> bản ghi</small>
+    </div>
+    <div class="d-flex align-items-center">
+        <form id="sizeForm" method="get" action="/admin/customers" class="form-inline mr-2">
+            <!-- giữ filter khi đổi size -->
+            <input type="hidden" name="q" value="<%= q || '' %>">
+            <input type="hidden" name="province" value="<%= province || '' %>">
+            <input type="hidden" name="shared" value="<%= shared || '' %>">
+            <input type="hidden" name="from" value="<%= from || '' %>">
+            <input type="hidden" name="to" value="<%= to || '' %>">
+            <input type="hidden" name="page" value="1">
+            <label class="mr-2 mb-0">Hiển thị</label>
+            <select name="size" class="form-control" onchange="document.getElementById('sizeForm').submit()">
+                <% [10,20,50,100].forEach(s => { %>
+                    <option value="<%= s %>" <%= size===s ? 'selected' : '' %>><%= s %></option>
+                <% }) %>
+            </select>
+            <span class="ml-2">/ trang</span>
+        </form>
+
+        <%
+        const qsExport = new URLSearchParams({ q, province, shared, from, to }).toString();
+        %>
+        <a class="btn btn-success"
+           href="/admin/customers/export.xlsx?<%= qsExport %>">
+            <i class="fas fa-file-excel mr-1"></i>Export Excel
+        </a>
+    </div>
+</div>
+
+<table class="table table-hover table-sm">
+    <thead class="thead-light">
+    <tr>
+        <th>Thời gian</th><th>Tên</th><th>Điện thoại</th><th>Tỉnh/TP</th><th>Share FB</th>
+    </tr>
+    </thead>
+    <tbody>
     <% customers.forEach(c => { %>
-      <tr>
-        <td><%= new Date(c.created_at).toLocaleString('vi-VN') %></td>
-        <td><%= c.name %></td>
-        <td>
-          <% if (user.role==='editor') { %>
-            <span class="phone-mask" data-id="<%= c.id %>"><%= c.phone_mask %></span>
-            <button class="btn btn-xs btn-outline-primary ml-2 reveal" data-id="<%= c.id %>">Xem</button>
-          <% } else { %>
-            <%= c.phone %>
-          <% } %>
-        </td>
-        <td><%= c.province %></td>
-        <td><%= c.shared_fb ? '✅' : '' %></td>
-      </tr>
+        <tr>
+            <td><%= new Date(c.created_at).toLocaleString('vi-VN') %></td>
+            <td><%= c.name %></td>
+            <td>
+                <% if (user.role==='editor') { %>
+                    <span class="phone-mask"
+                          data-id="<%= c.id %>"
+                          data-mask="<%= c.phone_mask %>"><%= c.phone_mask %></span>
+                    <button class="btn btn-xs btn-outline-primary ml-2 reveal" data-id="<%= c.id %>">Xem</button>
+                <% } else { %>
+                    <%= c.phone %>
+                <% } %>
+            </td>
+            <td><%= c.province %></td>
+            <td><%= c.shared_fb ? '✅' : '' %></td>
+        </tr>
     <% }) %>
-  </tbody>
+    </tbody>
 </table>
+
+<!-- Pagination -->
+<nav aria-label="Trang">
+    <ul class="pagination">
+        <%
+        const baseQs = new URLSearchParams({ q, province, shared, from, to, size });
+        const makeHref = (p) => { const qs = new URLSearchParams(baseQs.toString()); qs.set('page', p); return '/admin/customers?' + qs.toString(); };
+        const prevPage = Math.max(page-1, 1);
+        const nextPage = Math.min(page+1, totalPages);
+        const start = Math.max(1, page-2);
+        const end = Math.min(totalPages, start+4);
+        %>
+        <li class="page-item <%= page<=1 ? 'disabled' : '' %>">
+            <a class="page-link" href="<%= makeHref(prevPage) %>">«</a>
+        </li>
+
+        <% for (let p = start; p <= end; p++) { %>
+            <li class="page-item <%= p===page ? 'active' : '' %>">
+                <a class="page-link" href="<%= makeHref(p) %>"><%= p %></a>
+            </li>
+        <% } %>
+
+        <li class="page-item <%= page>=totalPages ? 'disabled' : '' %>">
+            <a class="page-link" href="<%= makeHref(nextPage) %>">»</a>
+        </li>
+    </ul>
+</nav>
+
 <script>
-$(document).on('click','.reveal', async function(){
-  const id = $(this).data('id');
-  const r = await fetch(`/admin/customers/${id}/reveal-phone`);
-  if (r.ok) { const { phone } = await r.json(); $(this).prev('.phone-mask').text(phone); $(this).remove(); }
-});
+    // Chỉ cho phép hiển thị số ĐT ở 1 dòng tại một thời điểm
+    let currentOpenId = null;
+
+    $(document).on('click', '.reveal', async function () {
+        const $btn  = $(this);
+        const id    = $btn.data('id');
+        const $span = $btn.prev('.phone-mask');
+        const mask  = $span.data('mask');
+
+        // Nếu click lại đúng dòng đang mở -> ẨN
+        if (currentOpenId === id) {
+            $span.text(mask);
+            $btn.text('Xem');
+            currentOpenId = null;
+            return;
+        }
+
+        // Ẩn dòng trước đó (nếu có)
+        if (currentOpenId) {
+            const $oldBtn  = $(`.reveal[data-id="${currentOpenId}"]`);
+            const $oldSpan = $oldBtn.prev('.phone-mask');
+            $oldSpan.text($oldSpan.data('mask'));
+            $oldBtn.text('Xem');
+        }
+
+        // Lấy số thật (cache để lần sau không gọi API)
+        let phone = $span.data('phone');
+        if (!phone) {
+            const r = await fetch(`/admin/customers/${id}/reveal-phone`);
+            if (!r.ok) { alert('Không lấy được số ĐT'); return; }
+            ({ phone } = await r.json());
+            $span.data('phone', phone || '');
+        }
+
+        // Hiển thị
+        $span.text(phone || '');
+        $btn.text('Ẩn');
+        currentOpenId = id;
+    });
 </script>

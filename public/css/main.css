@@ -144,22 +144,26 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
     display:flex; flex-direction:column; gap:10px;
     z-index:980; /* > ticker(900), < modal(1000) */
 }
-.fab-btn{
+.fab-btn.fab-btn{
     width:var(--fab-size);
     height:var(--fab-size);
-    border-radius:50%;
-    display:grid; place-items:center; text-decoration:none; user-select:none;
-    border:1px solid rgba(255,255,255,.35);
-    background:rgba(0,0,0,.15); backdrop-filter:blur(6px);
-    box-shadow:0 10px 24px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.18);
-    transition:transform .12s ease, box-shadow .12s ease, filter .12s ease;
+    display:grid; place-items:center;
+    text-decoration:none; user-select:none;
+
+    background:transparent;  /* bỏ nền */
+    border:none;             /* bỏ viền */
+    box-shadow:none;         /* bỏ bóng */
+}
+.fab-btn:hover img {
+    transform: scale(1.1);
+    transition: transform 0.15s ease;
 }
 .fab-btn svg{ width:var(--fab-icon); height:var(--fab-icon); display:block }
 .fab-btn:hover{ transform:translateY(-2px); box-shadow:0 14px 30px rgba(0,0,0,.34) }
 .fab-btn:active{ transform:translateY(0); filter:saturate(1.1) }
 
-.fab-zalo{ background:linear-gradient(180deg,#1d7bff 0%,#0068ff 100%) }
-.fab-mess{ background:linear-gradient(180deg,#43a1ff 0%,#1b7cff 100%) }
+/*.fab-zalo{ background:linear-gradient(180deg,#1d7bff 0%,#0068ff 100%) }
+.fab-mess{ background:linear-gradient(180deg,#43a1ff 0%,#1b7cff 100%) }*/
 
 /* ===== DEV panel ===== */
 .dev-panel{
@@ -182,4 +186,11 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
         --fab-size: 56px;
         --fab-icon: 30px;
     }
+}
+.fab-btn img {
+    width: 100%;
+    height: auto;
+    display: block;
+    max-width: 48px; /* Giới hạn tối đa */
+    border-radius: 50%; /* bo tròn */
 }

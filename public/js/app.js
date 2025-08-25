@@ -49,8 +49,8 @@
   const TEXT_DYNAMIC_COLOR = true;    // auto trắng/đen theo độ sáng lát
 
   // Liên hệ (điền ID thật)
-  const ZALO_URL='https://zalo.me/yourZaloID';
-  const MESSENGER_URL='https://m.me/yourPageID';
+  const ZALO_URL='https://zalo.me/0974123724';
+  const MESSENGER_URL='https://m.me/kin.quang';
 
   // API
   const LS_USER='lw_user', LS_SPINS='lw_spins', LS_SHARED='lw_shared_awarded';

@@ -1,21 +1,59 @@
 <% layout('layout') -%>
-<h3>Vouchers cho: <%= seg.label %> (#<%= seg.idx %>)</h3>
-<form method="post" action="/admin/vouchers/<%= seg.id %>/import">
-  <div class="form-group">
-    <label>Import từ textarea (mỗi dòng 1 code)</label>
-    <textarea class="form-control" name="codes" rows="6" placeholder="CODE123
-CODE456
-..."></textarea>
-  </div>
-  <button class="btn btn-primary">Import</button>
-</form>
 
-<h4 class="mt-4">Danh sách gần đây</h4>
+<h3>Vouchers cho: <%= seg.label %> (#<%= seg.idx %>)</h3>
+
+<div class="card card-body mb-3">
+  <form method="post"
+        action="/admin/vouchers/<%= seg.id %>/import-excel"
+        enctype="multipart/form-data"
+        class="form-inline">
+    <div class="form-group mr-2">
+      <label class="mr-2">Import Excel (.xlsx)</label>
+      <input type="file" name="file" accept=".xlsx" class="form-control-file" required>
+    </div>
+    <button class="btn btn-primary">Import</button>
+    <a class="btn btn-outline-secondary ml-2" href="/admin/vouchers/template.xlsx">Tải file mẫu</a>
+  </form>
+  <small class="text-muted mt-2 d-block">
+    Cấu trúc: cột A = <code>code</code>, có/không có header đều được. Mã trùng và dòng trống sẽ bị bỏ qua.
+  </small>
+</div>
+
+<h4 class="mt-3">Danh sách gần đây</h4>
 <table class="table table-sm">
-  <thead><tr><th>Code</th><th>Status</th><th>Assigned to</th><th>SMS</th><th>At</th></tr></thead>
+  <thead>
+  <tr>
+    <th>#</th>
+    <th>Code</th>
+    <th>Status</th>
+    <th>Assigned to</th>
+    <th>SMS</th>
+    <th>At</th>
+    <th class="text-right">Actions</th>
+  </tr>
+  </thead>
   <tbody>
-    <% vouchers.forEach(v=>{ %>
-      <tr><td><%= v.code %></td><td><%= v.status %></td><td><%= v.assigned_to||'' %></td><td><%= v.sms_id||'' %></td><td><%= new Date(v.created_at).toLocaleString('vi-VN') %></td></tr>
-    <% }) %>
+  <% if (!vouchers || vouchers.length === 0) { %>
+    <tr><td colspan="7" class="text-muted">Chưa có voucher nào.</td></tr>
+  <% } %>
+
+  <% (vouchers || []).forEach((v, i) => { %>
+    <tr>
+      <td><%= i + 1 %></td>
+      <td><code><%= v.code %></code></td>
+      <td><%= v.status %></td>
+      <td><%= v.assigned_to || '' %></td>
+      <td><%= v.sms_id || '' %></td>
+      <td><%= new Date(v.created_at).toLocaleString('vi-VN') %></td>
+      <td class="text-right">
+        <form method="post"
+              action="/admin/vouchers/<%= seg.id %>/<%= v.id %>/delete"
+              class="d-inline"
+              onsubmit="return confirm('Xóa voucher này?');">
+          <button class="btn btn-xs btn-danger">Xóa</button>
+        </form>
+      </td>
+    </tr>
+  <% }) %>
   </tbody>
 </table>
