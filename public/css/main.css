@@ -6,18 +6,18 @@ html,body{height:100%}
     --muted:#a7b3c7;
     --primary:#1769ff;
 
-    /* ===== TUNE: chiều cao ticker đáy (ảnh hưởng vị trí FAB) ===== */
+    /* chiều cao ticker đáy (ảnh hưởng vị trí FAB) */
     --ticker-h: 40px;
 
-    /* ===== TUNE: kích thước nút liên hệ nổi (FAB) ===== */
-    --fab-size: 64px;   /* 56 → 64 → 72 */
-    --fab-icon: 34px;   /* 28 → 34 → 38 */
+    /* kích thước nút liên hệ nổi (FAB) */
+    --fab-size: 64px;
+    --fab-icon: 34px;
 }
 html,body{margin:0;background:transparent}
 body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--text)}
 .hidden{display:none!important}
 
-/* ===== Background ===== */
+/* ===== Background (desktop/mobile) ===== */
 .page-bg{
     position:fixed; inset:0; z-index:0; pointer-events:none;
     background:
@@ -25,21 +25,35 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
             rgba(11,18,32,.04) 0%,
             rgba(11,18,32,.18) 55%,
             rgba(9,15,27,.36) 100%),
-            url("/img/2.jpg") center/cover no-repeat;
+            url("../img/bg-desktop.webp") center/cover no-repeat;
     background-attachment:fixed,fixed;
+}
+@media (max-width:600px){
+    .page-bg{
+        background:
+                radial-gradient(1200px 800px at 50% -10%,
+                rgba(11,18,32,.04) 0%,
+                rgba(11,18,32,.18) 55%,
+                rgba(9,15,27,.36) 100%),
+                url("../img/bg-mobile.webp") center/cover no-repeat;
+        background-attachment:fixed,fixed;
+    }
 }
 .page-bg::after{content:""; position:absolute; inset:0; background:rgba(0,0,0,.35)}
 
 /* ===== Layout ===== */
 .app-root{position:relative; z-index:1; min-height:100svh}
-.container{max-width:980px;margin:36px auto 72px;padding:0 20px}
+.container{max-width:1260px;margin:36px auto 72px;padding:0 20px}
 
 /* ===== Hero ===== */
-.hero{ text-align:center; margin-bottom:18px; position:relative; z-index:2 }
+.hero{ position:relative; text-align:center; margin-bottom:10px; z-index:2 }
 .hero__title{
-    margin:0 0 6px;font-weight:800;letter-spacing:.2px;
-    font-size:clamp(24px,3.8vw,38px);
-    color:#fff; text-shadow:0 3px 14px rgba(0,0,0,.6), 0 0 1px rgba(0,0,0,.8)
+    margin:0 0 8px; padding:6px 12px; border-radius:999px;
+    font-weight:800; letter-spacing:.2px;
+    font-size:clamp(16px,4vw,22px);
+    color:#fff; background:rgba(0,0,0,.30);
+    backdrop-filter:blur(6px); -webkit-backdrop-filter:blur(6px);
+    box-shadow:0 2px 10px rgba(0,0,0,.25)
 }
 .hero__meta{
     margin:0;display:inline-flex;gap:10px;align-items:center;font-weight:700;color:#fff;
@@ -50,10 +64,34 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
 }
 .muted{color:rgba(255,255,255,.95)} .dot{opacity:.9}
 
-/* ===== Card ===== */
+/* Desktop: ghim hero góc phải, tách 3 dòng (không chiếm layout ⇒ bánh to hơn) */
+@media (min-width:900px){
+    .hero{
+        position:absolute; right:20px; top:14px;
+        margin:0; text-align:right;
+        display:flex; flex-direction:column; align-items:flex-end; gap:8px;
+        pointer-events:none;
+    }
+    .hero__title{ margin:0; font-size:18px; padding:6px 10px; pointer-events:auto; }
+    .hero__meta{
+        background:transparent; box-shadow:none; padding:0; gap:6px;
+        display:flex; flex-direction:column; align-items:flex-end; pointer-events:auto;
+    }
+    .hero__meta .dot{ display:none; }
+    .hero__meta > span{
+        background:rgba(0,0,0,.30);
+        padding:6px 10px;
+        border-radius:999px;
+        box-shadow:0 2px 10px rgba(0,0,0,.25);
+        display:block;
+        min-width:max-content;
+    }
+}
+
+/* ===== Card (khung) ===== */
 .stage{display:grid;place-items:center;margin-top:4px;position:relative;z-index:1}
 .card{
-    position:relative; width:min(92vw,780px); border-radius:22px; padding:18px 18px 16px;
+    position:relative; border-radius:22px; padding:14px 14px 12px;
     box-shadow:0 20px 60px rgba(0,0,0,.35); background:transparent;
 }
 .card::before{
@@ -64,11 +102,24 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
 }
 .card > *{position:relative; z-index:1}
 
+/* Desktop: BỎ khung để bánh to nhất */
+@media (min-width:900px){
+    .card{ padding:0; box-shadow:none; }
+    .card::before{ display:none; }
+}
+
 /* ===== Wheel area ===== */
-.wheel-wrap{position:relative;width:min(86vw,520px);aspect-ratio:1/1;margin:10px auto 10px;filter:drop-shadow(0 30px 50px rgba(0,0,0,.35))}
+.wheel-card{ width:min(98vw, 1200px); margin-inline:auto; }
+.wheel-wrap{
+    position:relative;
+    width:100%;
+    aspect-ratio:1/1;
+    margin:10px auto 10px;
+    filter:drop-shadow(0 30px 50px rgba(0,0,0,.35))
+}
 .wheel-wrap canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 
-/* Spin button — in hoa */
+/* Spin button */
 .spin-btn{
     position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
     width:clamp(102px,16vw,132px);height:clamp(102px,16vw,132px);
@@ -102,6 +153,34 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
 .btn:disabled{opacity:.6;cursor:not-allowed}
 .legal{margin:10px 4px 2px;color:#e8edf6;opacity:.88;font-size:12.5px;text-align:center}
 
+/* ===== MOBILE OPTIMIZED: bỏ khung + căn giữa, chừa lề hai bên ===== */
+@media (max-width:899px){
+    /* bỏ toàn bộ khung mờ trên mobile để canh giữa dễ & bánh to hơn */
+    .wheel-card{ padding:0 !important; margin-inline:auto; }
+    .card{ padding:0 !important; box-shadow:none !important; }
+    .card::before{ display:none !important; }
+
+    /* chừa lề 8px mỗi bên, override inline width từ JS nếu có */
+    .wheel-card{
+        width: calc(100vw - 16px) !important;
+        margin-left: -10px !important;
+        margin-right: 8px !important;
+    }
+
+    /* giảm padding thân card để không đẩy canvas */
+    .stage{ margin-top: 4px; }
+}
+
+/* Mobile: sticky nút chia sẻ */
+@media (max-width:640px){
+    .actions{
+        position:fixed; left:12px; right:12px;
+        bottom:calc(12px + var(--ticker-h));
+        z-index:940; margin:0;
+    }
+    .btn.share{ width:100%; padding:14px; border-radius:14px; }
+}
+
 /* ===== Modal ===== */
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.46);display:grid;place-items:center;z-index:1000}
 .modal__dialog{width:min(92vw,420px);background:#0f1526;border:1px solid #223157;border-radius:16px;padding:18px;color:var(--text);box-shadow:0 20px 60px rgba(0,0,0,.45)}
@@ -116,7 +195,7 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
 .btn.ghost{background:#1b263d;color:#c9d4e7}
 .modal__hint{margin:4px 0 0;font-size:12px;color:#8ca0bd}
 
-/* Popup trúng thưởng to hơn */
+/* Popup trúng thưởng */
 #winModal .modal__dialog{ width:min(92vw,560px); text-align:center; }
 #winModal .modal__title{ font-size:24px; margin-bottom:8px; }
 #winModal .modal__prize{ font-size:22px; margin:8px 0 4px; }
@@ -136,38 +215,35 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
 .ticker__item{ padding:0 8px; opacity:.95 }
 @keyframes tickerScroll{ from{ transform:translateX(0) } to{ transform:translateX(-50%) } }
 
-/* ===== Nút liên hệ nổi góc phải ===== */
+/* ===== FAB ===== */
 .contact-fab{
     position:fixed;
     right:14px;
-    bottom:calc(14px + var(--ticker-h,40px) + env(safe-area-inset-bottom));
+    bottom:calc(14px + var(--ticker-h) + env(safe-area-inset-bottom));
     display:flex; flex-direction:column; gap:10px;
-    z-index:980; /* > ticker(900), < modal(1000) */
+    z-index:980;
 }
 .fab-btn.fab-btn{
     width:var(--fab-size);
     height:var(--fab-size);
     display:grid; place-items:center;
     text-decoration:none; user-select:none;
-
-    background:transparent;  /* bỏ nền */
-    border:none;             /* bỏ viền */
-    box-shadow:none;         /* bỏ bóng */
+    background:transparent; border:none; box-shadow:none;
 }
-.fab-btn:hover img {
-    transform: scale(1.1);
-    transition: transform 0.15s ease;
-}
+.fab-btn:hover img { transform: scale(1.1); transition: transform 0.15s ease; }
 .fab-btn svg{ width:var(--fab-icon); height:var(--fab-icon); display:block }
 .fab-btn:hover{ transform:translateY(-2px); box-shadow:0 14px 30px rgba(0,0,0,.34) }
 .fab-btn:active{ transform:translateY(0); filter:saturate(1.1) }
+.fab-btn img { width: 100%; height: auto; display: block; max-width: 48px; border-radius: 50%; }
 
-/*.fab-zalo{ background:linear-gradient(180deg,#1d7bff 0%,#0068ff 100%) }
-.fab-mess{ background:linear-gradient(180deg,#43a1ff 0%,#1b7cff 100%) }*/
+/* Mobile: nhường chỗ cho nút chia sẻ sticky */
+@media (max-width:640px){
+    .contact-fab{ bottom:calc(14px + var(--ticker-h) + 56px + env(safe-area-inset-bottom)); }
+}
 
 /* ===== DEV panel ===== */
 .dev-panel{
-    position: fixed; right: 14px; bottom: calc(54px + var(--ticker-h,40px)); z-index: 9999; display:none;
+    position: fixed; right: 14px; bottom: calc(54px + var(--ticker-h)); z-index: 9999; display:none;
     gap: 6px; background: rgba(0,0,0,.35); color:#fff;
     border: 1px solid rgba(255,255,255,.25); padding: 8px; border-radius: 12px;
     backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
@@ -180,17 +256,10 @@ body{font:15px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;co
 }
 .dev-panel button:hover{ background: rgba(255,255,255,.28); }
 
-/* Màn nhỏ: thu gọn FAB nếu cần */
+/* Màn rất nhỏ: thu gọn FAB */
 @media (max-width:420px){
-    :root{
-        --fab-size: 56px;
-        --fab-icon: 30px;
-    }
+    :root{ --fab-size: 56px; --fab-icon: 30px; }
 }
-.fab-btn img {
-    width: 100%;
-    height: auto;
-    display: block;
-    max-width: 48px; /* Giới hạn tối đa */
-    border-radius: 50%; /* bo tròn */
-}
+
+/* phòng tràn ngang ngoài ý muốn */
+html, body { overflow-x: hidden; }

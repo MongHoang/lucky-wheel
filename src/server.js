@@ -15,7 +15,7 @@ import passport, { seedSuperAdmin } from "./auth.js";
 import { pool } from "./db.js";
 
 // Routers
-import { publicRouter } from "./routes/public.js";
+import publicApi from "./routes/public_api.js";  // <-- dùng router hợp nhất /api/*
 import adminRoutes from "./routes/admin.js";
 
 dotenv.config();
@@ -33,8 +33,8 @@ app.set("views", path.join(__dirname, "../views"));
 // ===== Core middlewares =====
 app.set("trust proxy", 1);
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
-app.use(express.json({ limit: "2mb" }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "2mb" }));                  // parse JSON bodies
+app.use(express.urlencoded({ extended: true }));          // parse form bodies
 app.use(methodOverride("_method"));
 
 // ===== Helmet (CSP OFF in production per your request) =====
@@ -64,7 +64,7 @@ app.use(
 app.use(passport.initialize());
 app.use(passport.session());
 
-// ===== Serve your existing FE (no need to move files) =====
+// ===== Serve FE static =====
 const STATIC_DIR = process.env.STATIC_DIR
     ? path.resolve(__dirname, "..", process.env.STATIC_DIR)
     : path.join(__dirname, "..", "public");
@@ -72,8 +72,8 @@ const STATIC_DIR = process.env.STATIC_DIR
 app.use(express.static(STATIC_DIR));
 app.get("/", (_req, res) => res.sendFile(path.join(STATIC_DIR, "index.html")));
 
-// ===== Public API for the wheel FE =====
-app.use(publicRouter); // /api/wheel, /api/spin, /api/notify-win, ...
+// ===== Public API (wheel, spin, notify-win, register, share) =====
+app.use(publicApi); // /api/wheel, /api/spin, /api/notify-win, /api/register, /api/share
 
 // ===== Admin UI (EJS + AdminLTE) =====
 app.use("/admin", adminRoutes);

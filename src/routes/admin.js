@@ -33,7 +33,6 @@ admin.get('/', ensureAuth, (req,res)=> res.redirect('/admin/users'));
 
 // ===== Users =====
 admin.get('/users', ensureAuth, ensureRole('super_admin','admin'), async (req,res)=>{
-  // Lấy thêm số lần AUTO logout 7 ngày gần nhất cho từng user
   const { rows } = await query(`
     SELECT
       u.id, u.username, u.display_name, u.role, u.is_active, u.created_at,
@@ -51,7 +50,6 @@ admin.get('/users', ensureAuth, ensureRole('super_admin','admin'), async (req,re
 });
 
 admin.get('/users/:id/auto-logout', ensureAuth, ensureRole('super_admin','admin'), async (req,res)=>{
-  // Trang chi tiết thời điểm auto logout 7 ngày gần nhất cho 1 user
   const { rows: urows } = await query('SELECT id, username, display_name FROM admin_users WHERE id=$1', [req.params.id]);
   if (!urows.length) return res.status(404).send('User not found');
   const { rows: events } = await query(
@@ -163,7 +161,24 @@ admin.get('/segments', ensureAuth, ensureRole('admin','super_admin'), async (req
     const w = await query('INSERT INTO wheels (version, is_active) VALUES ($1,false) RETURNING id,version', [v]);
     wheelId = w.rows[0].id;
   }
-  const { rows: segs } = await query('SELECT * FROM wheel_segments WHERE wheel_id=$1 ORDER BY idx ASC', [wheelId]);
+
+  // 🔽 Truy vấn mới: đếm available đúng
+  const { rows: segs } = await query(`
+    SELECT ws.*,
+           COALESCE(avail.cnt, 0) AS available_count
+    FROM wheel_segments ws
+           LEFT JOIN (
+      SELECT segment_id, COUNT(*) AS cnt
+      FROM vouchers
+      WHERE
+        (status IS NULL OR LOWER(status) IN ('', 'new', 'available'))
+        AND (assigned_to IS NULL OR assigned_to::text = '')
+      GROUP BY segment_id
+    ) AS avail ON avail.segment_id = ws.id
+    WHERE ws.wheel_id = $1
+    ORDER BY ws.idx
+  `, [wheelId]);
+
   res.render('admin/segments', { user:req.user, wheels, segs });
 });
 admin.post('/segments/save', ensureAuth, ensureRole('admin','super_admin'), async (req,res)=>{
@@ -193,7 +208,6 @@ admin.post('/segments/activate', ensureAuth, ensureRole('super_admin'), async (r
 });
 
 // ================== Vouchers ==================
-// Template (đặt TRƯỚC route :segmentId để không bị nuốt route)
 admin.get('/vouchers/template.xlsx', ensureAuth, ensureRole('admin','super_admin'), async (req,res)=>{
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet('template');
@@ -208,7 +222,17 @@ admin.get('/vouchers/template.xlsx', ensureAuth, ensureRole('admin','super_admin
 admin.get('/vouchers/:segmentId', ensureAuth, ensureRole('admin','super_admin'), async (req,res)=>{
   const { rows: seg } = await query('SELECT * FROM wheel_segments WHERE id=$1', [req.params.segmentId]);
   const { rows: v }  = await query('SELECT * FROM vouchers WHERE segment_id=$1 ORDER BY created_at DESC LIMIT 200', [req.params.segmentId]);
-  res.render('admin/vouchers', { user:req.user, seg: seg[0], vouchers: v });
+
+  // 🔽 Truy vấn mới: đếm available đúng
+  const { rows: cntRows } = await query(`
+  SELECT COUNT(*)::int AS cnt
+  FROM vouchers
+  WHERE segment_id = $1
+    AND (status IS NULL OR LOWER(status) IN ('', 'new', 'available'))
+    AND (assigned_to IS NULL OR assigned_to::text = '')
+`, [req.params.segmentId]);
+
+  res.render('admin/vouchers', { user:req.user, seg: seg[0], vouchers: v, available_count: cntRows[0]?.cnt ?? 0 });
 });
 
 admin.post('/vouchers/:segmentId/import-excel',
@@ -224,7 +248,7 @@ admin.post('/vouchers/:segmentId/import-excel',
       ws.eachRow((row, rowNumber) => {
         const val = String(row.getCell(1).value ?? '').trim();
         if (!val) return;
-        if (rowNumber === 1 && val.toLowerCase() === 'code') return; // skip header
+        if (rowNumber === 1 && val.toLowerCase() === 'code') return;
         if (seen.has(val)) return;
         seen.add(val); codes.push(val);
       });

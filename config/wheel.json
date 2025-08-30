@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "slices": [
+    { "id": "s01", "label": "Voucher 10%",   "weight": 10 },
+    { "id": "s02", "label": "Áo thun",       "weight": 5  },
+    { "id": "s03", "label": "Chúc may mắn",  "weight": 25 },
+    { "id": "s04", "label": "Voucher 20%",   "weight": 8  },
+    { "id": "s05", "label": "Nón",           "weight": 6  },
+    { "id": "s06", "label": "Miễn phí ship", "weight": 12 },
+    { "id": "s07", "label": "Voucher 50k",   "weight": 12 },
+    { "id": "s08", "label": "Sticker pack",  "weight": 10 },
+    { "id": "s09", "label": "Bình nước",     "weight": 6  },
+    { "id": "s10", "label": "Giải đặc biệt", "weight": 6  }
+  ]
+}

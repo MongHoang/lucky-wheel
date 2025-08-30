@@ -1,6 +1,16 @@
 <% layout('layout') -%>
 
-<h3>Vouchers cho: <%= seg.label %> (#<%= seg.idx %>)</h3>
+<h3>
+  Vouchers cho: <%= seg.label %> (#<%= seg.idx %>)
+  <% if (typeof available_count !== 'undefined') { %>
+    <span class="badge badge-<%= available_count === 0 ? 'danger' : 'secondary' %> ml-2">
+      <%= available_count %> available
+    </span>
+    <% if (available_count === 0) { %>
+      <span class="text-danger ml-2 font-weight-bold">Hết mã</span>
+    <% } %>
+  <% } %>
+</h3>
 
 <div class="card card-body mb-3">
   <form method="post"

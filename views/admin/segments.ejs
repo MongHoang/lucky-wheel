@@ -8,10 +8,28 @@
   <% for (let i=0; i<10; i++) { const s = segs[i]; %>
   <tr>
     <td><%= i %></td>
-    <td><input class="form-control" name="label" value="<%= s?.label||'' %>"></td>
-    <td><input class="form-control" name="color" value="<%= s?.color||'' %>" placeholder="#FFD166"></td>
-    <td><input class="form-control" name="weight" value="<%= s?.weight||0 %>" type="number" min="0" max="100"></td>
-    <td><input type="hidden" name="id" value="<%= s?.id||'' %>"></td>
+    <td>
+      <input class="form-control" name="label" value="<%= s?.label||'' %>">
+    </td>
+    <td>
+      <div class="d-flex align-items-center">
+        <input type="color"
+               class="form-control color-picker"
+               name="color"
+               value="<%= s?.color || '#FFD166' %>"
+                <%= s?.color ? '' : 'disabled' %> >
+        <label class="ml-2 mb-0">
+          <input type="checkbox" name="useDefault" <%= s?.color ? '' : 'checked' %> >
+          Dùng màu mặc định
+        </label>
+      </div>
+    </td>
+    <td>
+      <input class="form-control" name="weight" value="<%= s?.weight||0 %>" type="number" min="0" max="100">
+    </td>
+    <td>
+      <input type="hidden" name="id" value="<%= s?.id||'' %>">
+    </td>
   </tr>
   <% } %>
   </tbody>
@@ -29,24 +47,46 @@
 <p>Chọn lát ở dưới để import mã</p>
 <ul class="list-unstyled">
   <% if (Array.isArray(segs) && segs.length) { %>
-    <% for (const s of segs) { %>
-      <li>#<%= s.idx %> - <%= s.label %> <a class="ml-2" href="/admin/vouchers/<%= s.id %>">Quản lý mã</a></li>
+    <% for (const s of segs) {
+      const c = Number(s.available_count || 0);
+    %>
+    <li>
+      #<%= s.idx %> - <%= s.label %>
+      <a class="ml-2" href="/admin/vouchers/<%= s.id %>">Quản lý mã</a>
+      <span class="badge badge-<%= c === 0 ? 'danger' : 'secondary' %> ml-2">
+          <%= c %> available
+        </span>
+      <% if (c === 0) { %>
+        <span class="text-danger ml-2 font-weight-bold">Hết mã — vui lòng import thêm</span>
+      <% } %>
+    </li>
     <% } %>
   <% } else { %>
     <li class="text-muted">Chưa có lát nào.</li>
   <% } %>
 </ul>
 
+<style>
+  .color-picker {
+    padding: 0 !important;
+    width: 42px;
+    height: 32px;
+  }
+</style>
+
 <script>
+  // Save segments
   document.getElementById('btnSave').addEventListener('click', async () => {
     const rows = document.querySelectorAll('#segBody tr');
     const data = [];
     rows.forEach((tr, idx) => {
+      const useDefault = tr.querySelector('input[name=useDefault]')?.checked;
+      const colorInput = tr.querySelector('input[name=color]');
       data.push({
         id: tr.querySelector('input[name=id]').value || null,
         idx,
         label: tr.querySelector('input[name=label]').value,
-        color: tr.querySelector('input[name=color]').value || null,
+        color: useDefault ? null : (colorInput.value || null),
         weight: parseInt(tr.querySelector('input[name=weight]').value || '0', 10)
       });
     });
@@ -56,5 +96,13 @@
       body: JSON.stringify({ wheel_id:'<%= wheels[0]?.id %>', segments:data })
     });
     if (r.ok) location.reload(); else alert('Lỗi: cần 10 lát và tổng weight=100');
+  });
+
+  // Toggle color input enable/disable theo checkbox
+  document.querySelectorAll('input[name=useDefault]').forEach((cb) => {
+    cb.addEventListener('change', (e) => {
+      const colorInp = e.target.closest('tr').querySelector('input[name=color]');
+      colorInp.disabled = e.target.checked;
+    });
   });
 </script>
