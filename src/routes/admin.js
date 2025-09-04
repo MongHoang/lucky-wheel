@@ -8,6 +8,12 @@ import ExcelJS from 'exceljs';
 import multer from 'multer';
 
 const admin = Router();
+function redirectByRole(req, res) {
+  const role = req.user?.role;
+  if (role === 'editor') return res.redirect('/admin/customers');
+  // admin & super_admin vào trang quản trị user
+  return res.redirect('/admin/users');
+}
 const loginLimiter = rateLimit({ windowMs: 10*60*1000, max: 30 });
 
 // Multer cho import Excel vouchers
@@ -20,8 +26,9 @@ const upload = multer({
 admin.get('/login', (req,res)=> res.render('login', { query: req.query }));
 admin.post('/login', loginLimiter, passport.authenticate('local', { failureRedirect: '/admin/login?err=1' }), async (req,res)=>{
   await onLoginRecordSession(req);
-  res.redirect('/admin');   // sẽ redirect sang /admin/users (xem route dưới)
+  return redirectByRole(req, res); // editor -> /admin/customers ; admin/super_admin -> /admin/users
 });
+
 
 admin.post('/logout', ensureAuth, async (req,res)=>{
   await onManualLogout(req);
@@ -29,7 +36,7 @@ admin.post('/logout', ensureAuth, async (req,res)=>{
 });
 
 // ===== BỎ hẳn Dashboard: chuyển hướng root sang /users =====
-admin.get('/', ensureAuth, (req,res)=> res.redirect('/admin/users'));
+admin.get('/', ensureAuth, (req,res)=> redirectByRole(req, res));
 
 // ===== Users =====
 admin.get('/users', ensureAuth, ensureRole('super_admin','admin'), async (req,res)=>{
