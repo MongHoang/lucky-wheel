@@ -6,10 +6,32 @@ export function ensureAuth(req, res, next) {
 }
 export function ensureRole(...roles) {
   return (req, res, next) => {
-    if (req.isAuthenticated?.() && roles.includes(req.user.role)) return next();
-    return res.status(403).send('Forbidden');
+    if (!req.user) return res.redirect('/admin/login');
+
+    if (roles.includes(req.user.role)) return next();
+
+    // Nếu request là fetch/AJAX hoặc muốn JSON => trả JSON gọn
+    const wantsJson =
+        req.xhr ||
+        req.get('X-Requested-With') === 'XMLHttpRequest' ||
+        (req.get('Accept') || '').includes('application/json');
+
+    if (wantsJson) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+
+    // Trang 403 đẹp
+    const backUrl =
+        req.user?.role === 'editor' ? '/admin/customers' : '/admin';
+
+    return res.status(403).render('errors/403', {
+      user: req.user,
+      backUrl,
+      title: 'Truy cập bị từ chối'
+    });
   };
 }
+
 
 export async function onLoginRecordSession(req) {
   try {
